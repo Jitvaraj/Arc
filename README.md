@@ -4,10 +4,10 @@ Your Progress. Your Journey. Your Space.
 
 A personal tracking and productivity space built for students.
 
-"Version" (https://img.shields.io/badge/version-1.0.0-7C9E87?style=for-the-badge)
-"Release" (https://img.shields.io/badge/release-initial-64748b?style=for-the-badge)
-"Platform" (https://img.shields.io/badge/platform-web-334155?style=for-the-badge)
-"Privacy" (https://img.shields.io/badge/privacy-local--first-16a085?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.0.0-7C9E87?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-initial-64748b?style=for-the-badge)
+![Platform](https://img.shields.io/badge/platform-web-334155?style=for-the-badge)
+![Privacy](https://img.shields.io/badge/privacy-local--first-16a085?style=for-the-badge)
 
 ---
 
