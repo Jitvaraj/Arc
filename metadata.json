@@ -1,0 +1,8 @@
+{
+  "name": "ARC — Personal Tracking",
+  "description": "Your Progress. Your Journey. Your Space. A personal tracking and productivity space built for students featuring exam dashboard, habits, workout logging, notes, and local storage.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
