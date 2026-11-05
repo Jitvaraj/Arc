@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#080808" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>ARC — Personal Tracking</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            appDark: '#080808',
+            appCard: '#121212',
+            appCardHover: '#181818',
+            appBorder: '#222222',
+            appGreen: '#4ADE80',
+            appGreenMuted: '#22543D',
+            appGreenSubtle: 'rgba(74, 222, 128, 0.1)',
+            rankGold: '#FFD700',
+            rankSilver: '#C0C0C0',
+            rankBronze: '#CD7F32',
+            rankLapis: '#3B82F6',
+            rankRuby: '#E11D48'
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- React & Babel for direct execution -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Mobile-first ergonomic touch adjustments */
+    body {
+      background-color: #080808;
+      color: #f3f4f6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea, select {
+      user-select: text;
+    }
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="bg-appDark text-gray-100 antialiased overflow-hidden">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- IndexedDB Core Storage Engine ---
+    const DB_NAME = "ArcPersonalDB";
+    const DB_VERSION = 1;
+
+    function openDatabase() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("journals")) db.createObjectStore("journals", { keyPath: "date" });
+          if (!db.objectStoreNames.contains("tracker")) db.createObjectStore("tracker", { keyPath: "date" });
+          if (!db.objectStoreNames.contains("workouts")) db.createObjectStore("workouts", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("scheduledWorkouts")) db.createObjectStore("scheduledWorkouts", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("quotes")) db.createObjectStore("quotes", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("notes")) db.createObjectStore("notes", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("exams")) db.createObjectStore("exams", { keyPath: "id" });
+          if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
+        };
+        req.onsuccess = () => resolve(req.target.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function dbGetAll(storeName) {
+      try {
+        const db = await openDatabase();
+        return new Promise((res, rej) => {
+          const tx = db.transaction(storeName, "readonly");
+          const store = tx.objectStore(storeName);
+          const req = store.getAll();
+          req.onsuccess = () => res(req.result || []);
+          req.onerror = () => rej(req.error);
+        });
+      } catch (err) {
+        return JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
+      }
+    }
+
+    async function dbPut(storeName, item) {
+      try {
+        const db = await openDatabase();
+        return new Promise((res, rej) => {
+          const tx = db.transaction(storeName, "readwrite");
+          const store = tx.objectStore(storeName);
+          const req = store.put(item);
+          req.onsuccess = () => res(req.result);
+          req.onerror = () => rej(req.error);
+        });
+      } catch (err) {
+        const existing = JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
+        const idx = existing.findIndex(e => (e.id && e.id === item.id) || (e.date && e.date === item.date) || (e.key && e.key === item.key));
+        if (idx >= 0) existing[idx] = item;
+        else existing.push(item);
+        localStorage.setItem(`arc_${storeName}`, JSON.stringify(existing));
+      }
+    }
+
+    async function dbDelete(storeName, key) {
+      try {
+        const db = await openDatabase();
+        return new Promise((res, rej) => {
+          const tx = db.transaction(storeName, "readwrite");
+          const store = tx.objectStore(storeName);
+          const req = store.delete(key);
+          req.onsuccess = () => res();
+          req.onerror = () => rej(req.error);
+        });
+      } catch (err) {
+        let existing = JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
+        existing = existing.filter(e => (e.id || e.date || e.key) !== key);
+        localStorage.setItem(`arc_${storeName}`, JSON.stringify(existing));
+      }
+    }
+
+    // --- Helpers ---
+    const formatDateKey = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    const MONTH_NAMES = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    // --- Minimal Clean SVG Icons ---
+    const IconCalendar = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>;
+    const IconTracker = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" strokeWidth="1.75"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 12l2 2 4-4"/></svg>;
+    const IconWorkout = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M6 8v8m12-8v8M3 10v4m18-4v4M6 12h12"/></svg>;
+    const IconQuotes = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M7 8h3v4H7zm7 0h3v4h-3zM7 12a4 4 0 014 4H7v-4zm7 0a4 4 0 014 4h-4v-4z"/></svg>;
+    const IconNotes = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 12h6m-6 4h4m5 5H6a2 2 0 01-2-2V5a2 2 0 012-2h8l6 6v12a2 2 0 01-2 2z"/></svg>;
+    const IconExams = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5"/></svg>;
+    const IconSettings = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="1.75"/></svg>;
+
+    // --- Circular Progress Gauge Component ---
+    function CircularProgress({ percentage, size = 80, strokeWidth = 7 }) {
+      const radius = (size - strokeWidth) / 2;
+      const circumference = radius * 2 * Math.PI;
+      const validPct = isNaN(percentage) ? 0 : Math.min(100, Math.max(0, percentage));
+      const strokeDashoffset = circumference - (validPct / 100) * circumference;
+
+      return (
+        <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+          <svg className="transform -rotate-90" width={size} height={size}>
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="#202020"
+              strokeWidth={strokeWidth}
+              fill="transparent"
+            />
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="#4ADE80"
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              fill="transparent"
+              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+            />
+          </svg>
+          <span className="absolute text-sm font-semibold tracking-tight text-white">
+            {validPct.toFixed(1)}%
+          </span>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // MAIN APP COMPONENT
+    // ==========================================
+    function App() {
+      const [activeTab, setActiveTab] = useState("calendar");
+      const [today] = useState(new Date());
+
+      // Global Stores State
+      const [trackerMap, setTrackerMap] = useState({}); // { [dateStr]: { status: 'YES'|'NO', reflection: '' } }
+      const [habitConfig, setHabitConfig] = useState({ name: "Daily Focus & Discipline", target: "Unbroken Streak" });
+      const [workouts, setWorkouts] = useState([]);
+      const [scheduledWorkouts, setScheduledWorkouts] = useState([]);
+      const [journals, setJournals] = useState({});
+      const [quotes, setQuotes] = useState([]);
+      const [notes, setNotes] = useState([]);
+      const [exams, setExams] = useState([]);
+
+      // Active Calendar Selected Date
+      const [selectedDate, setSelectedDate] = useState(new Date());
+      const [showDateModal, setShowDateModal] = useState(false);
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+      // Load initial data from IndexedDB
+      useEffect(() => {
+        (async () => {
+          const tRecords = await dbGetAll("tracker");
+          const tMap = {};
+          tRecords.forEach(r => { tMap[r.date] = r; });
+          setTrackerMap(tMap);
+
+          const wRecords = await dbGetAll("workouts");
+          setWorkouts(wRecords.sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+          const swRecords = await dbGetAll("scheduledWorkouts");
+          setScheduledWorkouts(swRecords);
+
+          const jRecords = await dbGetAll("journals");
+          const jMap = {};
+          jRecords.forEach(j => { jMap[j.date] = j.content; });
+          setJournals(jMap);
+
+          const qRecords = await dbGetAll("quotes");
+          setQuotes(qRecords.sort((a,b) => (a.rank || 999) - (b.rank || 999)));
+
+          const nRecords = await dbGetAll("notes");
+          setNotes(nRecords.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
+
+          const eRecords = await dbGetAll("exams");
+          setExams(eRecords.sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+          const habitMeta = await dbGetAll("meta");
+          const habit = habitMeta.find(m => m.key === "habit");
+          if (habit) setHabitConfig(habit.data);
+        })();
+      }, []);
+
+      // Calculate Streaks
+      const { currentStreak, bestStreak } = useMemo(() => {
+        let cur = 0;
+        let best = 0;
+        let tempStreak = 0;
+
+        // Check consecutive past days
+        const sortedDates = Object.keys(trackerMap).sort();
+        if (sortedDates.length === 0) return { currentStreak: 0, bestStreak: 0 };
+
+        // Best streak calculation
+        let running = 0;
+        let d = new Date(sortedDates[0]);
+        const endD = new Date();
+        while (d <= endD) {
+          const key = formatDateKey(d);
+          if (trackerMap[key] && trackerMap[key].status === "YES") {
+            running++;
+            if (running > best) best = running;
+          } else if (trackerMap[key] && trackerMap[key].status === "NO") {
+            running = 0;
+          }
+          d.setDate(d.getDate() + 1);
+        }
+
+        // Current streak backwards from today or yesterday
+        let checkDate = new Date();
+        const todayKey = formatDateKey(checkDate);
+        if (!trackerMap[todayKey] || trackerMap[todayKey].status !== "YES") {
+          // Check yesterday to see if streak is alive
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+        while (true) {
+          const k = formatDateKey(checkDate);
+          if (trackerMap[k] && trackerMap[k].status === "YES") {
+            cur++;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+        return { currentStreak: cur, bestStreak: Math.max(best, cur) };
+      }, [trackerMap]);
+
+      // --- Backup & Restore ---
+      const handleExport = () => {
+        const payload = {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          tracker: Object.values(trackerMap),
+          workouts,
+          scheduledWorkouts,
+          journals: Object.entries(journals).map(([date, content]) => ({ date, content })),
+          quotes,
+          notes,
+          exams,
+          habitConfig
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `arc_backup_${formatDateKey(new Date())}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const handleImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const data = JSON.parse(event.target.result);
+            if (!data.tracker || !data.exams) throw new Error("Invalid backup structure.");
+
+            for (let t of data.tracker) await dbPut("tracker", t);
+            for (let w of (data.workouts || [])) await dbPut("workouts", w);
+            for (let s of (data.scheduledWorkouts || [])) await dbPut("scheduledWorkouts", s);
+            for (let j of (data.journals || [])) await dbPut("journals", j);
+            for (let q of (data.quotes || [])) await dbPut("quotes", q);
+            for (let n of (data.notes || [])) await dbPut("notes", n);
+            for (let ex of (data.exams || [])) await dbPut("exams", ex);
+            if (data.habitConfig) await dbPut("meta", { key: "habit", data: data.habitConfig });
+
+            alert("Backup restored successfully. Reloading...");
+            window.location.reload();
+          } catch (err) {
+            alert("Failed to restore backup: " + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="flex flex-col h-screen max-w-md mx-auto bg-appDark border-x border-appBorder overflow-hidden relative">
+          
+          {/* Top Status Bar Simulator */}
+          <header className="px-5 pt-3 pb-2 flex items-center justify-between text-xs text-gray-400 select-none border-b border-appBorder/40">
+            <span className="font-semibold text-white tracking-widest text-[13px]">ARC</span>
+            <div className="flex items-center space-x-3">
+              <span className="text-[11px] text-gray-400 tracking-wider">
+                {today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+              <button 
+                onClick={() => setShowSettingsModal(true)} 
+                className="text-gray-400 hover:text-white transition"
+                title="Backup & Settings"
+              >
+                <IconSettings />
+              </button>
+            </div>
+          </header>
+
+          {/* Main Workspace (Scrollable Viewport) */}
+          <main className="flex-1 overflow-y-auto scrollbar-none pb-20">
+            {activeTab === "calendar" && (
+              <CalendarSection 
+                today={today}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                trackerMap={trackerMap}
+                scheduledWorkouts={scheduledWorkouts}
+                journals={journals}
+                onOpenDayDetails={() => setShowDateModal(true)}
+              />
+            )}
+
+            {activeTab === "tracker" && (
+              <TrackerSection
+                today={today}
+                trackerMap={trackerMap}
+                currentStreak={currentStreak}
+                bestStreak={bestStreak}
+                habitConfig={habitConfig}
+                setHabitConfig={async (cfg) => {
+                  setHabitConfig(cfg);
+                  await dbPut("meta", { key: "habit", data: cfg });
+                }}
+                onCheckIn={async (status, reflection = "") => {
+                  const key = formatDateKey(today);
+                  const entry = { date: key, status, reflection, updatedAt: new Date().toISOString() };
+                  await dbPut("tracker", entry);
+                  setTrackerMap(prev => ({ ...prev, [key]: entry }));
+                }}
+              />
+            )}
+
+            {activeTab === "workout" && (
+              <WorkoutSection
+                workouts={workouts}
+                scheduledWorkouts={scheduledWorkouts}
+                onAddWorkout={async (w) => {
+                  await dbPut("workouts", w);
+                  setWorkouts(prev => [w, ...prev]);
+                }}
+                onDeleteWorkout={async (id) => {
+                  await dbDelete("workouts", id);
+                  setWorkouts(prev => prev.filter(w => w.id !== id));
+                }}
+                onAddScheduledWorkout={async (sw) => {
+                  await dbPut("scheduledWorkouts", sw);
+                  setScheduledWorkouts(prev => [...prev, sw]);
+                }}
+                onDeleteScheduled={async (id) => {
+                  await dbDelete("scheduledWorkouts", id);
+                  setScheduledWorkouts(prev => prev.filter(s => s.id !== id));
+                }}
+              />
+            )}
+
+            {activeTab === "quotes" && (
+              <QuoteWallSection
+                quotes={quotes}
+                onSaveQuote={async (quote) => {
+                  await dbPut("quotes", quote);
+                  setQuotes(prev => {
+                    const filtered = prev.filter(q => q.id !== quote.id);
+                    return [...filtered, quote].sort((a,b) => (a.rank || 999) - (b.rank || 999));
+                  });
+                }}
+                onDeleteQuote={async (id) => {
+                  await dbDelete("quotes", id);
+                  setQuotes(prev => prev.filter(q => q.id !== id));
+                }}
+              />
+            )}
+
+            {activeTab === "notes" && (
+              <NotesSection
+                notes={notes}
+                onSaveNote={async (note) => {
+                  await dbPut("notes", note);
+                  setNotes(prev => {
+                    const filtered = prev.filter(n => n.id !== note.id);
+                    return [note, ...filtered];
+                  });
+                }}
+                onDeleteNote={async (id) => {
+                  await dbDelete("notes", id);
+                  setNotes(prev => prev.filter(n => n.id !== id));
+                }}
+              />
+            )}
+
+            {activeTab === "exams" && (
+              <ExamMarksSection
+                exams={exams}
+                onAddExam={async (exam) => {
+                  await dbPut("exams", exam);
+                  setExams(prev => [exam, ...prev].sort((a,b) => new Date(b.date) - new Date(a.date)));
+                }}
+                onDeleteExam={async (id) => {
+                  await dbDelete("exams", id);
+                  setExams(prev => prev.filter(e => e.id !== id));
+                }}
+              />
+            )}
+          </main>
+
+          {/* Date Journal & Daily Workout Scheduling Modal */}
+          {showDateModal && (
+            <DateJournalModal
+              date={selectedDate}
+              journalContent={journals[formatDateKey(selectedDate)] || ""}
+              scheduledForDate={scheduledWorkouts.filter(s => s.date === formatDateKey(selectedDate))}
+              onSaveJournal={async (content) => {
+                const key = formatDateKey(selectedDate);
+                await dbPut("journals", { date: key, content });
+                setJournals(prev => ({ ...prev, [key]: content }));
+              }}
+              onAddScheduled={async (sw) => {
+                await dbPut("scheduledWorkouts", sw);
+                setScheduledWorkouts(prev => [...prev, sw]);
+              }}
+              onDeleteScheduled={async (id) => {
+                await dbDelete("scheduledWorkouts", id);
+                setScheduledWorkouts(prev => prev.filter(s => s.id !== id));
+              }}
+              onClose={() => setShowDateModal(false)}
+            />
+          )}
+
+          {/* Settings & Offline Backup Modal */}
+          {showSettingsModal && (
+            <SettingsModal
+              onClose={() => setShowSettingsModal(false)}
+              onExport={handleExport}
+              onImport={handleImport}
+            />
+          )}
+
+          {/* Fixed Bottom Navigation (Reference Image standard) */}
+          <nav className="absolute bottom-0 left-0 right-0 h-16 bg-appDark/95 backdrop-blur-md border-t border-appBorder flex items-center justify-around px-2 z-30">
+            <NavButton 
+              label="Calendar" 
+              active={activeTab === "calendar"} 
+              icon={<IconCalendar />} 
+              onClick={() => setActiveTab("calendar")} 
+            />
+            <NavButton 
+              label="Tracker" 
+              active={activeTab === "tracker"} 
+              icon={<IconTracker />} 
+              onClick={() => setActiveTab("tracker")} 
+            />
+            <NavButton 
+              label="Workout" 
+              active={activeTab === "workout"} 
+              icon={<IconWorkout />} 
+              onClick={() => setActiveTab("workout")} 
+            />
+            <NavButton 
+              label="Quotes" 
+              active={activeTab === "quotes"} 
+              icon={<IconQuotes />} 
+              onClick={() => setActiveTab("quotes")} 
+            />
+            <NavButton 
+              label="Notes" 
+              active={activeTab === "notes"} 
+              icon={<IconNotes />} 
+              onClick={() => setActiveTab("notes")} 
+            />
+            <NavButton 
+              label="Exams" 
+              active={activeTab === "exams"} 
+              icon={<IconExams />} 
+              onClick={() => setActiveTab("exams")} 
+            />
+          </nav>
+
+        </div>
+      );
+    }
+
+    // --- Bottom Nav Item ---
+    function NavButton({ label, active, icon, onClick }) {
+      return (
+        <button
+          onClick={onClick}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
+            active ? "text-appGreen" : "text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <div className="relative">
+            {icon}
+            {active && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-appGreen rounded-full"></span>}
+          </div>
+          <span className="text-[10px] tracking-tight mt-1 font-medium">{label}</span>
+        </button>
+      );
+    }
+
+    // ==========================================
+    // 1. CALENDAR COMPONENT
+    // ==========================================
+    function CalendarSection({ today, selectedDate, setSelectedDate, trackerMap, scheduledWorkouts, journals, onOpenDayDetails }) {
+      const [viewMode, setViewMode] = useState("monthly"); // "weekly", "monthly", "yearly"
+      const [viewYear, setViewYear] = useState(today.getFullYear());
+      const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+      const todayKey = formatDateKey(today);
+      const selectedKey = formatDateKey(selectedDate);
+
+      // Monthly Grid computation
+      const calendarDays = useMemo(() => {
+        const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+        const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+        const days = [];
+
+        // Prev month padding
+        const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+        for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+          days.push({
+            date: new Date(viewYear, viewMonth - 1, prevMonthDays - i),
+            currentMonth: false
+          });
+        }
+        // Current month
+        for (let d = 1; d <= daysInMonth; d++) {
+          days.push({
+            date: new Date(viewYear, viewMonth, d),
+            currentMonth: true
+          });
+        }
+        // Next month padding to fill grid
+        const remaining = 42 - days.length;
+        for (let n = 1; n <= remaining; n++) {
+          days.push({
+            date: new Date(viewYear, viewMonth + 1, n),
+            currentMonth: false
+          });
+        }
+        return days;
+      }, [viewYear, viewMonth]);
+
+      // Weekly dates around selectedDate
+      const weeklyDays = useMemo(() => {
+        const curr = new Date(selectedDate);
+        const dayOfWeek = curr.getDay();
+        const start = new Date(curr);
+        start.setDate(curr.getDate() - dayOfWeek);
+        const arr = [];
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          arr.push(d);
+        }
+        return arr;
+      }, [selectedDate]);
+
+      return (
+        <div className="p-4 space-y-4">
+          {/* Header Title & View Selector */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
+            <div className="flex items-center space-x-1 bg-appCard p-1 rounded-lg border border-appBorder text-xs">
+              {["monthly", "weekly", "yearly"].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-3 py-1 rounded-md capitalize font-medium transition ${
+                    viewMode === mode ? "bg-appBorder text-white text-appGreen" : "text-gray-400"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Month / Year Navigator */}
+          {viewMode !== "yearly" ? (
+            <div className="flex items-center justify-between text-sm py-1 border-b border-appBorder/50">
+              <span className="font-medium text-white tracking-wide">
+                {MONTH_NAMES[viewMonth]} <span className="text-gray-400">{viewYear}</span>
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    if (viewMonth === 0) {
+                      setViewMonth(11);
+                      setViewYear(y => Math.max(2019, y - 1));
+                    } else setViewMonth(m => m - 1);
+                  }}
+                  className="p-1.5 rounded-md hover:bg-appCard text-gray-300"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => {
+                    setViewMonth(today.getMonth());
+                    setViewYear(today.getFullYear());
+                    setSelectedDate(new Date(today));
+                  }}
+                  className="text-xs text-appGreen font-medium px-2 py-0.5 rounded border border-appGreen/30 hover:bg-appGreenSubtle"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => {
+                    if (viewMonth === 11) {
+                      setViewMonth(0);
+                      setViewYear(y => Math.min(2030, y + 1));
+                    } else setViewMonth(m => m + 1);
+                  }}
+                  className="p-1.5 rounded-md hover:bg-appCard text-gray-300"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-sm py-1 border-b border-appBorder/50">
+              <span className="font-medium text-white tracking-wide">Year {viewYear}</span>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setViewYear(y => Math.max(2019, y - 1))} className="p-1.5 text-gray-300">‹</button>
+                <button onClick={() => setViewYear(y => Math.min(2030, y + 1))} className="p-1.5 text-gray-300">›</button>
+              </div>
+            </div>
+          )}
+
+          {/* MONTHLY VIEW */}
+          {viewMode === "monthly" && (
+            <div>
+              <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-2 font-medium">
+                {DAYS_SHORT.map(d => <span key={d}>{d}</span>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map((item, idx) => {
+                  const dateKey = formatDateKey(item.date);
+                  const isToday = dateKey === todayKey;
+                  const isSelected = dateKey === selectedKey;
+                  const trackerEntry = trackerMap[dateKey];
+                  const hasWorkout = scheduledWorkouts.some(w => w.date === dateKey);
+                  const hasJournal = !!journals[dateKey];
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setSelectedDate(item.date);
+                        setViewMonth(item.date.getMonth());
+                        setViewYear(item.date.getFullYear());
+                      }}
+                      className={`h-11 rounded-lg flex flex-col items-center justify-center relative transition border ${
+                        isSelected 
+                          ? "bg-gray-800/80 border-gray-600 text-white" 
+                          : isToday 
+                            ? "border-appGreen text-white bg-appGreenSubtle/20" 
+                            : "border-transparent text-gray-300 hover:bg-appCard"
+                      } ${!item.currentMonth ? "opacity-30" : ""}`}
+                    >
+                      <span className="text-xs font-medium">{item.date.getDate()}</span>
+                      
+                      {/* Status Dots / Fire Icon */}
+                      <div className="flex items-center space-x-0.5 mt-0.5 h-3">
+                        {trackerEntry?.status === "YES" && (
+                          <span className="text-[10px] leading-none">🔥</span>
+                        )}
+                        {hasWorkout && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                        )}
+                        {hasJournal && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-appGreen"></span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* WEEKLY VIEW */}
+          {viewMode === "weekly" && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {weeklyDays.map((d, i) => {
+                  const dKey = formatDateKey(d);
+                  const isToday = dKey === todayKey;
+                  const isSelected = dKey === selectedKey;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedDate(d)}
+                      className={`p-2 rounded-lg flex flex-col items-center border ${
+                        isSelected 
+                          ? "bg-gray-800 border-gray-500" 
+                          : isToday 
+                            ? "border-appGreen" 
+                            : "border-appBorder bg-appCard"
+                      }`}
+                    >
+                      <span className="text-[10px] text-gray-400">{DAYS_SHORT[d.getDay()]}</span>
+                      <span className="text-sm font-semibold mt-1">{d.getDate()}</span>
+                      {trackerMap[dKey]?.status === "YES" && <span className="text-xs mt-0.5">🔥</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Day Timeline Details */}
+              <div className="mt-4 p-4 rounded-xl bg-appCard border border-appBorder">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-white">
+                      {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {journals[selectedKey] ? "Journal recorded" : "No journal entry"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={onOpenDayDetails}
+                    className="px-3 py-1 text-xs rounded-md bg-appGreen text-black font-medium hover:bg-green-400 transition"
+                  >
+                    Open Day
+                  </button>
+                </div>
+
+                {/* Scheduled sessions for selected date */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-400 tracking-wider uppercase">Scheduled Workouts</p>
+                  {scheduledWorkouts.filter(w => w.date === selectedKey).length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">No workouts scheduled for this date.</p>
+                  ) : (
+                    scheduledWorkouts.filter(w => w.date === selectedKey).map(w => (
+                      <div key={w.id} className="p-2.5 rounded-lg bg-black/40 border border-appBorder flex items-center justify-between text-xs">
+                        <div>
+                          <p className="font-medium text-white">{w.title}</p>
+                          <p className="text-gray-400">{w.time || "Anytime"} • {w.details}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* YEARLY VIEW */}
+          {viewMode === "yearly" && (
+            <div className="grid grid-cols-3 gap-2.5">
+              {MONTH_NAMES.map((name, mIdx) => {
+                const daysInM = new Date(viewYear, mIdx + 1, 0).getDate();
+                let checksInMonth = 0;
+                for (let d = 1; d <= daysInM; d++) {
+                  const k = formatDateKey(new Date(viewYear, mIdx, d));
+                  if (trackerMap[k]?.status === "YES") checksInMonth++;
+                }
+
+                return (
+                  <button
+                    key={name}
+                    onClick={() => {
+                      setViewMonth(mIdx);
+                      setViewMode("monthly");
+                    }}
+                    className="p-3 rounded-xl bg-appCard border border-appBorder hover:border-gray-600 flex flex-col items-center justify-center text-center transition"
+                  >
+                    <span className="text-xs font-semibold text-white">{name.slice(0, 3)}</span>
+                    <span className="text-[11px] text-gray-400 mt-1">{checksInMonth} 🔥</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Selected Date Summary Card */}
+          {viewMode === "monthly" && (
+            <div className="p-3.5 rounded-xl bg-appCard border border-appBorder flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-400">Selected Date</p>
+                <p className="text-sm font-medium text-white">
+                  {selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </div>
+              <button
+                onClick={onOpenDayDetails}
+                className="px-3.5 py-1.5 rounded-lg border border-appGreen text-appGreen text-xs font-medium hover:bg-appGreenSubtle transition"
+              >
+                Journal & Schedule
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 2. TRACKER COMPONENT (Strictly minimal YES/NO)
+    // ==========================================
+    function TrackerSection({ today, trackerMap, currentStreak, bestStreak, habitConfig, setHabitConfig, onCheckIn }) {
+      const todayKey = formatDateKey(today);
+      const currentEntry = trackerMap[todayKey];
+      const [showHabitEdit, setShowHabitEdit] = useState(false);
+      const [habitDraft, setHabitDraft] = useState(habitConfig.name);
+      const [reflectionInput, setReflectionInput] = useState("");
+      const [showNoModal, setShowNoModal] = useState(false);
+
+      // Thoughtful, non-repeating calm reminders for NO check-ins
+      const stoicReminders = [
+        "A lapse is not a collapse. Reflect calmly and resume tomorrow.",
+        "Discipline is about what you do next. Reset and move forward.",
+        "Observe without judgment. Tomorrow is an untouched page.",
+        "Consistency over time beats short bursts of perfection."
+      ];
+      const [quoteOfTheDay] = useState(() => stoicReminders[Math.floor(Math.random() * stoicReminders.length)]);
+
+      const handlePressYes = () => {
+        onCheckIn("YES", "");
+      };
+
+      const handlePressNo = () => {
+        setShowNoModal(true);
+      };
+
+      const confirmNo = () => {
+        onCheckIn("NO", reflectionInput);
+        setShowNoModal(false);
+        setReflectionInput("");
+      };
+
+      return (
+        <div className="p-5 flex flex-col items-center justify-between min-h-[520px]">
+          {/* Tracked Habit Header */}
+          <div className="w-full text-center">
+            <div className="flex items-center justify-center space-x-2">
+              <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold">Daily Habit</span>
+              <button onClick={() => setShowHabitEdit(true)} className="text-gray-500 hover:text-white text-xs">✎</button>
+            </div>
+            <h2 className="text-lg font-medium text-white mt-1">{habitConfig.name}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Applies from tomorrow when updated</p>
+          </div>
+
+          {/* Minimal Central YES/NO Interaction */}
+          <div className="flex flex-col items-center my-6 space-y-4">
+            <button
+              onClick={handlePressYes}
+              className={`w-36 h-36 rounded-full flex flex-col items-center justify-center border-2 transition transform active:scale-95 shadow-xl ${
+                currentEntry?.status === "YES"
+                  ? "border-appGreen bg-appGreenSubtle text-appGreen ring-4 ring-appGreen/20"
+                  : "border-gray-700 bg-appCard text-white hover:border-gray-500"
+              }`}
+            >
+              <span className="text-2xl font-bold tracking-wider">YES</span>
+              {currentEntry?.status === "YES" && <span className="text-xs mt-1 text-appGreen">Completed</span>}
+            </button>
+
+            <button
+              onClick={handlePressNo}
+              className={`px-8 py-2 rounded-full text-xs font-semibold tracking-wider transition border ${
+                currentEntry?.status === "NO"
+                  ? "border-red-500 bg-red-950/30 text-red-400"
+                  : "border-appBorder bg-appCard text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              NO
+            </button>
+
+            {currentEntry && (
+              <p className="text-xs text-gray-400 mt-1">
+                Checked in as <span className="text-white font-medium">{currentEntry.status}</span>. Tap to adjust anytime.
+              </p>
+            )}
+          </div>
+
+          {/* Streaks Readout */}
+          <div className="w-full grid grid-cols-2 gap-3 mt-auto">
+            <div className="p-3.5 rounded-xl bg-appCard border border-appBorder flex flex-col items-center">
+              <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
+                Current Streak 🔥
+              </span>
+              <span className="text-2xl font-bold text-white mt-1">{currentStreak}</span>
+              <span className="text-[10px] text-gray-400">days active</span>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-appCard border border-appBorder flex flex-col items-center">
+              <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
+                Best Streak 🔥
+              </span>
+              <span className="text-2xl font-bold text-white mt-1">{bestStreak}</span>
+              <span className="text-[10px] text-gray-400">personal best</span>
+            </div>
+          </div>
+
+          {/* Reflection Modal on NO */}
+          {showNoModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-4">
+                <h3 className="text-sm font-semibold text-white">Daily Reflection</h3>
+                <p className="text-xs text-gray-400 italic">"{quoteOfTheDay}"</p>
+                <textarea
+                  value={reflectionInput}
+                  onChange={(e) => setReflectionInput(e.target.value)}
+                  placeholder="Optional: What hindered you today? (Keep it factual)"
+                  className="w-full h-24 p-2.5 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none focus:border-gray-500 resize-none"
+                />
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    onClick={() => setShowNoModal(false)}
+                    className="flex-1 py-2 text-xs rounded-lg border border-appBorder text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmNo}
+                    className="flex-1 py-2 text-xs rounded-lg bg-gray-200 text-black font-semibold"
+                  >
+                    Record NO
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Habit Configuration Modal */}
+          {showHabitEdit && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-4">
+                <h3 className="text-sm font-semibold text-white">Configure Daily Habit</h3>
+                <div>
+                  <label className="text-[11px] text-gray-400">Habit Name</label>
+                  <input
+                    type="text"
+                    value={habitDraft}
+                    onChange={(e) => setHabitDraft(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setShowHabitEdit(false)}
+                    className="flex-1 py-2 text-xs rounded-lg border border-appBorder text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHabitConfig({ ...habitConfig, name: habitDraft });
+                      setShowHabitEdit(false);
+                    }}
+                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                  >
+                    Apply Next Day
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 3. WORKOUT SECTION
+    // ==========================================
+    function WorkoutSection({ workouts, scheduledWorkouts, onAddWorkout, onDeleteWorkout, onAddScheduledWorkout, onDeleteScheduled }) {
+      const [viewTab, setViewTab] = useState("log"); // "log" | "history" | "scheduled"
+      const [exerciseName, setExerciseName] = useState("");
+      const [weight, setWeight] = useState("");
+      const [sets, setSets] = useState("");
+      const [reps, setReps] = useState("");
+      const [notes, setNotes] = useState("");
+      const [dateVal, setDateVal] = useState(formatDateKey(new Date()));
+
+      const handleAdd = (e) => {
+        e.preventDefault();
+        if (!exerciseName) return;
+        const newW = {
+          id: "w_" + Date.now(),
+          exerciseName,
+          weight: Number(weight) || 0,
+          sets: Number(sets) || 0,
+          reps: Number(reps) || 0,
+          notes,
+          date: dateVal
+        };
+        onAddWorkout(newW);
+        setExerciseName("");
+        setWeight("");
+        setSets("");
+        setReps("");
+        setNotes("");
+      };
+
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight">Workout</h1>
+            <div className="flex bg-appCard p-1 rounded-lg border border-appBorder text-xs">
+              <button
+                onClick={() => setViewTab("log")}
+                className={`px-3 py-1 rounded-md font-medium transition ${
+                  viewTab === "log" ? "bg-appBorder text-appGreen" : "text-gray-400"
+                }`}
+              >
+                Log
+              </button>
+              <button
+                onClick={() => setViewTab("history")}
+                className={`px-3 py-1 rounded-md font-medium transition ${
+                  viewTab === "history" ? "bg-appBorder text-appGreen" : "text-gray-400"
+                }`}
+              >
+                History
+              </button>
+              <button
+                onClick={() => setViewTab("scheduled")}
+                className={`px-3 py-1 rounded-md font-medium transition ${
+                  viewTab === "scheduled" ? "bg-appBorder text-appGreen" : "text-gray-400"
+                }`}
+              >
+                Scheduled
+              </button>
+            </div>
+          </div>
+
+          {viewTab === "log" && (
+            <form onSubmit={handleAdd} className="space-y-3 bg-appCard p-4 rounded-xl border border-appBorder">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Record Completed Workout</p>
+              <div>
+                <label className="text-[11px] text-gray-400">Exercise</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Incline Dumbbell Press"
+                  value={exerciseName}
+                  onChange={(e) => setExerciseName(e.target.value)}
+                  className="w-full mt-1 p-2.5 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none focus:border-gray-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[11px] text-gray-400">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    placeholder="32.5"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Sets</label>
+                  <input
+                    type="number"
+                    placeholder="4"
+                    value={sets}
+                    onChange={(e) => setSets(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Reps</label>
+                  <input
+                    type="number"
+                    placeholder="10"
+                    value={reps}
+                    onChange={(e) => setReps(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-gray-400">Date</label>
+                  <input
+                    type="date"
+                    value={dateVal}
+                    onChange={(e) => setDateVal(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Notes (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="RPE 8.5, good form"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-lg bg-appGreen text-black font-semibold text-xs mt-2 hover:bg-green-400 transition"
+              >
+                Save Workout Entry
+              </button>
+            </form>
+          )}
+
+          {viewTab === "history" && (
+            <div className="space-y-2">
+              {workouts.length === 0 ? (
+                <p className="text-xs text-gray-500 italic text-center py-8">No workout logs recorded yet.</p>
+              ) : (
+                workouts.map(w => (
+                  <div key={w.id} className="p-3.5 rounded-xl bg-appCard border border-appBorder flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-white">{w.exerciseName}</span>
+                        <span className="text-[10px] text-appGreen font-mono px-1.5 py-0.5 rounded bg-appGreenSubtle">
+                          {w.weight ? `${w.weight} kg` : "Bodyweight"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {w.sets} sets × {w.reps} reps {w.notes ? `• ${w.notes}` : ""}
+                      </p>
+                      <span className="text-[10px] text-gray-500">{w.date}</span>
+                    </div>
+                    <button
+                      onClick={() => onDeleteWorkout(w.id)}
+                      className="text-gray-500 hover:text-red-400 text-xs p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {viewTab === "scheduled" && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400">Future workout sessions planned:</p>
+              {scheduledWorkouts.length === 0 ? (
+                <p className="text-xs text-gray-500 italic text-center py-6">No workouts scheduled.</p>
+              ) : (
+                scheduledWorkouts.map(s => (
+                  <div key={s.id} className="p-3.5 rounded-xl bg-appCard border border-appBorder flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-white">{s.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{s.date} {s.time ? `at ${s.time}` : ""} • {s.details}</p>
+                    </div>
+                    <button
+                      onClick={() => onDeleteScheduled(s.id)}
+                      className="text-gray-500 hover:text-red-400 text-xs p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 4. QUOTE WALL (Manual Ranking Colors)
+    // ==========================================
+    function QuoteWallSection({ quotes, onSaveQuote, onDeleteQuote }) {
+      const [activeTab, setActiveTab] = useState("all"); // "all" | "ranked"
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [quoteText, setQuoteText] = useState("");
+      const [author, setAuthor] = useState("");
+      const [rank, setRank] = useState(0);
+
+      const rankBadges = {
+        1: { name: "1st", color: "border-rankGold text-rankGold bg-rankGold/10" },
+        2: { name: "2nd", color: "border-rankSilver text-rankSilver bg-rankSilver/10" },
+        3: { name: "3rd", color: "border-rankBronze text-rankBronze bg-rankBronze/10" },
+        4: { name: "4th", color: "border-rankLapis text-rankLapis bg-rankLapis/10" },
+        5: { name: "5th", color: "border-rankRuby text-rankRuby bg-rankRuby/10" }
+      };
+
+      const handleSave = (e) => {
+        e.preventDefault();
+        if (!quoteText) return;
+        const newQuote = {
+          id: "q_" + Date.now(),
+          text: quoteText,
+          author: author || "Unknown",
+          rank: Number(rank) || 0,
+          createdAt: new Date().toISOString()
+        };
+        onSaveQuote(newQuote);
+        setQuoteText("");
+        setAuthor("");
+        setRank(0);
+        setShowAddModal(false);
+      };
+
+      const displayedQuotes = activeTab === "ranked"
+        ? quotes.filter(q => q.rank > 0 && q.rank <= 5).sort((a,b) => a.rank - b.rank)
+        : quotes;
+
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight">Quote Wall</h1>
+            <div className="flex items-center space-x-2">
+              <div className="flex bg-appCard p-1 rounded-lg border border-appBorder text-xs">
+                <button
+                  onClick={() => setActiveTab("all")}
+                  className={`px-3 py-1 rounded-md font-medium transition ${
+                    activeTab === "all" ? "bg-appBorder text-appGreen" : "text-gray-400"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setActiveTab("ranked")}
+                  className={`px-3 py-1 rounded-md font-medium transition ${
+                    activeTab === "ranked" ? "bg-appBorder text-appGreen" : "text-gray-400"
+                  }`}
+                >
+                  Top 5 Ranked
+                </button>
+              </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="w-7 h-7 rounded-lg bg-appGreen text-black font-bold flex items-center justify-center text-sm"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {displayedQuotes.length === 0 ? (
+              <p className="text-xs text-gray-500 italic text-center py-8">
+                {activeTab === "ranked" ? "No ranked quotes assigned (1st-5th place)." : "No quotes saved yet."}
+              </p>
+            ) : (
+              displayedQuotes.map(q => {
+                const badge = rankBadges[q.rank];
+                return (
+                  <div
+                    key={q.id}
+                    className={`p-4 rounded-xl bg-appCard border transition relative ${
+                      badge ? `border-l-4 ${badge.color.split(" ")[0]}` : "border-appBorder"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm font-medium text-gray-200 leading-relaxed italic pr-4">
+                        "{q.text}"
+                      </p>
+                      <button
+                        onClick={() => onDeleteQuote(q.id)}
+                        className="text-gray-500 hover:text-red-400 text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between mt-3 text-xs">
+                      <span className="text-gray-400 font-normal">— {q.author}</span>
+                      {badge ? (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badge.color}`}>
+                          {badge.name} Rank
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-600">Unranked</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Add / Rank Quote Modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSave} className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-3">
+                <h3 className="text-sm font-semibold text-white">Add Quote</h3>
+                <div>
+                  <label className="text-[11px] text-gray-400">Quote Text</label>
+                  <textarea
+                    required
+                    value={quoteText}
+                    onChange={(e) => setQuoteText(e.target.value)}
+                    placeholder="Write the exact quote..."
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none resize-none h-20"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Author</label>
+                  <input
+                    type="text"
+                    value={author}
+                    onChange={(e) => setAuthor(e.target.value)}
+                    placeholder="e.g. Marcus Aurelius"
+                    className="w-full mt-1 p-2 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Rank (Manual user governance only)</label>
+                  <select
+                    value={rank}
+                    onChange={(e) => setRank(Number(e.target.value))}
+                    className="w-full mt-1 p-2 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  >
+                    <option value={0}>Unranked (Neutral)</option>
+                    <option value={1}>1st Place (Gold)</option>
+                    <option value={2}>2nd Place (Silver)</option>
+                    <option value={3}>3rd Place (Bronze)</option>
+                    <option value={4}>4th Place (Lapis Blue)</option>
+                    <option value={5}>5th Place (Ruby Red)</option>
+                  </select>
+                </div>
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 py-2 text-xs rounded-lg border border-appBorder text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                  >
+                    Save Quote
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 5. NOTES SECTION (General Purpose)
+    // ==========================================
+    function NotesSection({ notes, onSaveNote, onDeleteNote }) {
+      const [search, setSearch] = useState("");
+      const [showModal, setShowModal] = useState(false);
+      const [title, setTitle] = useState("");
+      const [content, setContent] = useState("");
+
+      const filteredNotes = notes.filter(n =>
+        n.title.toLowerCase().includes(search.toLowerCase()) ||
+        n.content.toLowerCase().includes(search.toLowerCase())
+      );
+
+      const handleSave = (e) => {
+        e.preventDefault();
+        if (!title && !content) return;
+        const newNote = {
+          id: "n_" + Date.now(),
+          title: title || "Untitled Note",
+          content,
+          createdAt: new Date().toISOString()
+        };
+        onSaveNote(newNote);
+        setTitle("");
+        setContent("");
+        setShowModal(false);
+      };
+
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight">Notes</h1>
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-3 py-1 text-xs rounded-lg bg-appGreen text-black font-semibold hover:bg-green-400 transition"
+            >
+              + New Note
+            </button>
+          </div>
+
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search notes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full p-2.5 rounded-xl bg-appCard border border-appBorder text-xs text-white focus:outline-none focus:border-gray-500"
+            />
+          </div>
+
+          <div className="space-y-2.5">
+            {filteredNotes.length === 0 ? (
+              <p className="text-xs text-gray-500 italic text-center py-8">No notes found.</p>
+            ) : (
+              filteredNotes.map(note => (
+                <div key={note.id} className="p-4 rounded-xl bg-appCard border border-appBorder space-y-1 relative">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">{note.title}</h3>
+                    <button
+                      onClick={() => onDeleteNote(note.id)}
+                      className="text-gray-500 hover:text-red-400 text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-300 whitespace-pre-wrap">{note.content}</p>
+                  <p className="text-[10px] text-gray-500 pt-1">
+                    {new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {showModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSave} className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-3">
+                <h3 className="text-sm font-semibold text-white">Create Note</h3>
+                <input
+                  type="text"
+                  placeholder="Note Title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+                />
+                <textarea
+                  placeholder="Note content..."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full h-32 p-2.5 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none resize-none"
+                />
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 py-2 text-xs rounded-lg border border-appBorder text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                  >
+                    Save Note
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6. EXAM MARKS SECTION (Directly adhering to Screenshot 2)
+    // ==========================================
+    function ExamMarksSection({ exams, onAddExam, onDeleteExam }) {
+      // Independent segmented categories
+      const [category, setCategory] = useState("Coaching Exams"); // "Coaching Exams" | "Tuition Exams"
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [selectedExamDetails, setSelectedExamDetails] = useState(null);
+
+      // Filter category specific exams
+      const categoryExams = useMemo(() => {
+        return exams.filter(e => e.category === category);
+      }, [exams, category]);
+
+      // Category Analytics
+      const stats = useMemo(() => {
+        if (categoryExams.length === 0) {
+          return { overallPct: 0, highestPct: 0, totalExams: 0 };
+        }
+        let totalObt = 0;
+        let totalMax = 0;
+        let highest = 0;
+
+        categoryExams.forEach(ex => {
+          let exObt = 0;
+          let exMax = 0;
+          ex.subjects.forEach(s => {
+            exObt += Number(s.obtained) || 0;
+            exMax += Number(s.maxMarks) || 0;
+          });
+          const pct = exMax > 0 ? (exObt / exMax) * 100 : 0;
+          if (pct > highest) highest = pct;
+          totalObt += exObt;
+          totalMax += exMax;
+        });
+
+        const overallPct = totalMax > 0 ? (totalObt / totalMax) * 100 : 0;
+        return {
+          overallPct,
+          highestPct: highest,
+          totalExams: categoryExams.length
+        };
+      }, [categoryExams]);
+
+      return (
+        <div className="p-4 space-y-4">
+          {/* Header Title */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold tracking-tight">Exam Marks</h1>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-1 rounded-lg bg-appGreen text-black font-semibold text-xs hover:bg-green-400 transition"
+            >
+              + Add Exam Result
+            </button>
+          </div>
+
+          {/* Segmented Switcher (Exact Screenshot 2 styling) */}
+          <div className="grid grid-cols-2 bg-appCard p-1 rounded-xl border border-appBorder text-xs font-medium">
+            <button
+              onClick={() => setCategory("Coaching Exams")}
+              className={`py-2 rounded-lg transition ${
+                category === "Coaching Exams"
+                  ? "bg-appBorder text-appGreen shadow-sm font-semibold"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Coaching Exams
+            </button>
+            <button
+              onClick={() => setCategory("Tuition Exams")}
+              className={`py-2 rounded-lg transition ${
+                category === "Tuition Exams"
+                  ? "bg-appBorder text-appGreen shadow-sm font-semibold"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Tuition Exams
+            </button>
+          </div>
+
+          {/* Top Analytics Card Matching Reference Image 2 */}
+          <div className="p-4 rounded-2xl bg-appCard border border-appBorder">
+            <div className="flex items-center justify-between">
+              {/* Left Gauge & Overall % */}
+              <div className="flex items-center space-x-3.5">
+                <CircularProgress percentage={stats.overallPct} size={76} strokeWidth={6} />
+                <div>
+                  <p className="text-xs text-gray-400">{category} Overall</p>
+                  <p className="text-2xl font-bold text-white tracking-tight">
+                    {stats.overallPct.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-gray-500">Avg. of all {category.toLowerCase()}</p>
+                </div>
+              </div>
+
+              {/* Right Mini Metrics */}
+              <div className="space-y-3 pl-3 border-l border-appBorder">
+                <div>
+                  <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                    🏆 Highest
+                  </p>
+                  <p className="text-sm font-semibold text-white">{stats.highestPct.toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                    📊 Total Exams
+                  </p>
+                  <p className="text-sm font-semibold text-white">{stats.totalExams}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Exams List */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs text-gray-400">
+              <span className="font-semibold uppercase tracking-wider text-[11px]">
+                Recent {category}
+              </span>
+              <span>{categoryExams.length} entries</span>
+            </div>
+
+            {categoryExams.length === 0 ? (
+              <div className="p-8 text-center bg-appCard rounded-xl border border-appBorder">
+                <p className="text-xs text-gray-500 italic">No exams recorded for {category}.</p>
+                <p className="text-[11px] text-gray-600 mt-1">Tap "+ Add Exam Result" above to add real data.</p>
+              </div>
+            ) : (
+              categoryExams.map(ex => {
+                let exObt = 0;
+                let exMax = 0;
+                ex.subjects.forEach(s => {
+                  exObt += Number(s.obtained) || 0;
+                  exMax += Number(s.maxMarks) || 0;
+                });
+                const examPct = exMax > 0 ? (exObt / exMax) * 100 : 0;
+
+                return (
+                  <div
+                    key={ex.id}
+                    onClick={() => setSelectedExamDetails(ex)}
+                    className="p-3.5 rounded-xl bg-appCard border border-appBorder hover:border-gray-600 cursor-pointer transition flex items-center justify-between"
+                  >
+                    <div className="space-y-1 pr-3">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-white">{ex.name}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400">{ex.date}</p>
+                      
+                      {/* Subjects preview string */}
+                      <p className="text-[11px] text-gray-300 font-mono tracking-tight line-clamp-1">
+                        {ex.subjects.map(s => `${s.name}: ${s.obtained}/${s.maxMarks}`).join(" | ")}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-sm font-semibold text-appGreen font-mono">
+                        {examPct.toFixed(1)}%
+                      </span>
+                      <span className="text-gray-500 text-xs">›</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Multi-Subject Exam Entry Modal */}
+          {showAddModal && (
+            <AddExamModal
+              category={category}
+              onClose={() => setShowAddModal(false)}
+              onSave={(newExam) => {
+                onAddExam(newExam);
+                setShowAddModal(false);
+              }}
+            />
+          )}
+
+          {/* Exam Details Modal */}
+          {selectedExamDetails && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-4">
+                <div className="flex items-center justify-between border-b border-appBorder pb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{selectedExamDetails.name}</h3>
+                    <p className="text-[11px] text-gray-400">{selectedExamDetails.category} • {selectedExamDetails.date}</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedExamDetails(null)}
+                    className="text-gray-400 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Subject Breakdown</p>
+                  {selectedExamDetails.subjects.map((sub, idx) => {
+                    const subPct = sub.maxMarks > 0 ? ((sub.obtained / sub.maxMarks) * 100).toFixed(1) : 0;
+                    return (
+                      <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-black border border-appBorder">
+                        <span className="font-medium text-gray-200">{sub.name}</span>
+                        <span className="font-mono text-gray-300">
+                          {sub.obtained} / {sub.maxMarks} <span className="text-appGreen ml-1">({subPct}%)</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedExamDetails.notes && (
+                  <div>
+                    <p className="text-[11px] text-gray-400">Notes:</p>
+                    <p className="text-xs text-gray-300 italic">{selectedExamDetails.notes}</p>
+                  </div>
+                )}
+
+                <div className="flex space-x-2 pt-2">
+                  <button
+                    onClick={() => {
+                      if (confirm("Delete this examination record?")) {
+                        onDeleteExam(selectedExamDetails.id);
+                        setSelectedExamDetails(null);
+                      }
+                    }}
+                    className="w-full py-2 text-xs rounded-lg border border-red-500/40 text-red-400 hover:bg-red-950/20"
+                  >
+                    Delete Record
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- Helper Modal for Adding Multi-Subject Exams ---
+    function AddExamModal({ category, onClose, onSave }) {
+      const [name, setName] = useState("");
+      const [date, setDate] = useState(formatDateKey(new Date()));
+      const [notes, setNotes] = useState("");
+      const [subjects, setSubjects] = useState([
+        { name: "Physics", obtained: "", maxMarks: "100" },
+        { name: "Maths", obtained: "", maxMarks: "100" }
+      ]);
+
+      const updateSubject = (index, field, value) => {
+        setSubjects(prev => {
+          const copy = [...prev];
+          copy[index][field] = value;
+          return copy;
+        });
+      };
+
+      const addSubjectRow = () => {
+        setSubjects(prev => [...prev, { name: "", obtained: "", maxMarks: "100" }]);
+      };
+
+      const removeSubjectRow = (index) => {
+        if (subjects.length === 1) return;
+        setSubjects(prev => prev.filter((_, i) => i !== index));
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!name) return;
+        const examRecord = {
+          id: "ex_" + Date.now(),
+          category,
+          name,
+          date,
+          notes,
+          subjects: subjects.map(s => ({
+            name: s.name || "Subject",
+            obtained: Number(s.obtained) || 0,
+            maxMarks: Number(s.maxMarks) || 100
+          }))
+        };
+        onSave(examRecord);
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSubmit} className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-3 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-sm font-semibold text-white">Record {category}</h3>
+
+            <div>
+              <label className="text-[11px] text-gray-400">Exam Title</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. JEE Mock Test 1"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full mt-1 p-2 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] text-gray-400">Date</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full mt-1 p-2 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+              />
+            </div>
+
+            {/* Subjects List */}
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] text-gray-400 font-semibold">Subjects & Marks</label>
+                <button
+                  type="button"
+                  onClick={addSubjectRow}
+                  className="text-xs text-appGreen font-medium"
+                >
+                  + Add Subject
+                </button>
+              </div>
+
+              {subjects.map((sub, idx) => (
+                <div key={idx} className="flex items-center space-x-1.5">
+                  <input
+                    type="text"
+                    placeholder="Subject"
+                    value={sub.name}
+                    onChange={(e) => updateSubject(idx, "name", e.target.value)}
+                    className="flex-1 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Obt"
+                    value={sub.obtained}
+                    onChange={(e) => updateSubject(idx, "obtained", e.target.value)}
+                    className="w-16 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none text-center"
+                  />
+                  <span className="text-gray-500 text-xs">/</span>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={sub.maxMarks}
+                    onChange={(e) => updateSubject(idx, "maxMarks", e.target.value)}
+                    className="w-16 p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none text-center"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSubjectRow(idx)}
+                    className="text-gray-500 hover:text-red-400 text-xs p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <label className="text-[11px] text-gray-400">Notes (optional)</label>
+              <input
+                type="text"
+                placeholder="Time management, silly mistakes..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full mt-1 p-2 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none"
+              />
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 text-xs rounded-lg border border-appBorder text-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+              >
+                Save Exam
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 7. DATE JOURNAL & WORKOUT MODAL
+    // ==========================================
+    function DateJournalModal({ date, journalContent, scheduledForDate, onSaveJournal, onAddScheduled, onDeleteScheduled, onClose }) {
+      const dateKey = formatDateKey(date);
+      const [draftContent, setDraftContent] = useState(journalContent);
+      const [autoSaved, setAutoSaved] = useState(false);
+
+      // Workout Scheduling form
+      const [title, setTitle] = useState("");
+      const [time, setTime] = useState("07:00");
+      const [details, setDetails] = useState("");
+
+      // Debounced auto-save
+      useEffect(() => {
+        const timer = setTimeout(() => {
+          if (draftContent !== journalContent) {
+            onSaveJournal(draftContent);
+            setAutoSaved(true);
+            setTimeout(() => setAutoSaved(false), 1500);
+          }
+        }, 800);
+        return () => clearTimeout(timer);
+      }, [draftContent]);
+
+      const handleAddSchedule = (e) => {
+        e.preventDefault();
+        if (!title) return;
+        const item = {
+          id: "sched_" + Date.now(),
+          date: dateKey,
+          title,
+          time,
+          details
+        };
+        onAddScheduled(item);
+        setTitle("");
+        setDetails("");
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-appBorder pb-2">
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </h3>
+                <span className="text-[10px] text-gray-400">
+                  {autoSaved ? "Saved automatically ✓" : "Daily entry & planning"}
+                </span>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
+            </div>
+
+            {/* Daily Journal Notepad */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Daily Journal</label>
+              <textarea
+                value={draftContent}
+                onChange={(e) => setDraftContent(e.target.value)}
+                placeholder="Write reflections, mental state, or plan for this day..."
+                className="w-full h-32 p-3 rounded-xl bg-black border border-appBorder text-xs text-white focus:outline-none resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* Workout Scheduling */}
+            <div className="space-y-2 pt-2 border-t border-appBorder">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Scheduled Workouts</p>
+              
+              {scheduledForDate.length > 0 && (
+                <div className="space-y-1.5 mb-2">
+                  {scheduledForDate.map(s => (
+                    <div key={s.id} className="p-2 rounded-lg bg-black border border-appBorder flex items-center justify-between text-xs">
+                      <div>
+                        <p className="font-medium text-white">{s.title}</p>
+                        <p className="text-[10px] text-gray-400">{s.time} • {s.details}</p>
+                      </div>
+                      <button onClick={() => onDeleteScheduled(s.id)} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form onSubmit={handleAddSchedule} className="space-y-2 bg-black/40 p-3 rounded-xl border border-appBorder">
+                <input
+                  type="text"
+                  placeholder="Session title (e.g. Upper Body Hypertrophy)"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Focus: Bench, Lat pulls"
+                    value={details}
+                    onChange={(e) => setDetails(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-black border border-appBorder text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-appGreen font-medium transition"
+                >
+                  + Add to this Date
+                </button>
+              </form>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="w-full py-2 text-xs rounded-lg bg-appGreen text-black font-semibold mt-2"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 8. SETTINGS & OFFLINE BACKUP MODAL
+    // ==========================================
+    function SettingsModal({ onClose, onExport, onImport }) {
+      return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-appCard border border-appBorder rounded-2xl p-5 max-w-sm w-full space-y-4">
+            <div className="flex items-center justify-between border-b border-appBorder pb-2">
+              <h3 className="text-sm font-semibold text-white">Data & Privacy</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed">
+              <strong>ARC</strong> operates completely offline with IndexedDB. No accounts, telemetry, or remote servers exist.
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={onExport}
+                className="w-full py-2.5 rounded-xl bg-appBorder text-white text-xs font-medium hover:bg-gray-800 transition flex items-center justify-center space-x-2"
+              >
+                <span>Export Offline JSON Backup</span>
+              </button>
+
+              <label className="w-full py-2.5 rounded-xl border border-appBorder text-gray-300 text-xs font-medium hover:bg-appBorder transition flex items-center justify-center cursor-pointer">
+                <span>Restore Backup File</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={onImport}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <p className="text-[10px] text-gray-600 text-center">Version 1.0.0 • Mobile-first Architecture</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Mount to DOM
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
