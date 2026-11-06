@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orion-v2.2.2-cache';
+const CACHE_NAME = 'orion-v2.2.4-cache';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -37,7 +37,6 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  // Always fetch version.json directly from network to detect new releases
   if (event.request.url.includes('version.json')) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))

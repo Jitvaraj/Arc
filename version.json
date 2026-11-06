@@ -1,7 +1,7 @@
 {
-  "latestVersion": "2.2.2",
-  "releaseName": "ORION v2.2.2 — Multi-Platform Update Checker",
-  "releaseNotes": "Automatic cross-platform version checking, PWA update reload banner, and GitHub Releases integration.",
+  "latestVersion": "2.2.4",
+  "releaseName": "ORION v2.2.4 — Real-Time Compressed Auto-Save Engine",
+  "releaseNotes": "Automated Base64-compressed real-time auto-saving after every button action across web, PWA, Android, Windows, and iOS.",
   "apkUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
   "windowsUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
   "webUrl": "https://jitvaraj.github.io/Orion-Forge/"

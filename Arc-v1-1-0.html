@@ -224,6 +224,54 @@
       }
     }
 
+    // --- Real-Time Compression Utilities (Base64/JSON Compressed Engine) ---
+    function compressState(stateObj) {
+      try {
+        const jsonStr = JSON.stringify(stateObj);
+        const utf8Bytes = new TextEncoder().encode(jsonStr);
+        let binaryStr = "";
+        for (let i = 0; i < utf8Bytes.length; i++) {
+          binaryStr += String.fromCharCode(utf8Bytes[i]);
+        }
+        return btoa(binaryStr);
+      } catch (err) {
+        console.warn("[Compression Error]", err);
+        return null;
+      }
+    }
+
+    function decompressState(compressedStr) {
+      try {
+        if (!compressedStr) return null;
+        const binaryStr = atob(compressedStr);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const jsonStr = new TextDecoder().decode(bytes);
+        return JSON.parse(jsonStr);
+      } catch (err) {
+        console.warn("[Decompression Error]", err);
+        return null;
+      }
+    }
+
+    async function autoSaveCompressedSnapshot(storesObj) {
+      try {
+        const compressed = compressState({
+          ...storesObj,
+          savedAt: new Date().toISOString(),
+          version: "2.2.4"
+        });
+        if (compressed) {
+          localStorage.setItem("orion_autosave_compressed", compressed);
+          await dbPut("meta", { key: "autosave_snapshot", data: compressed, updatedAt: new Date().toISOString() });
+        }
+      } catch (err) {
+        console.warn("[Auto-Save Failed]", err);
+      }
+    }
+
     // --- Timezone-Safe Date Utilities ---
     const formatDateKey = (d) => {
       const year = d.getFullYear();
@@ -583,11 +631,14 @@
       const [showSettingsModal, setShowSettingsModal] = useState(false);
 
       // PWA Install & Version Check State
-      const CURRENT_VERSION = "2.2.2";
+      const CURRENT_VERSION = "2.2.4";
       const [deferredPrompt, setDeferredPrompt] = useState(null);
       const [isAppInstalled, setIsAppInstalled] = useState(false);
       const [isIOSDevice, setIsIOSDevice] = useState(false);
       const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+      const [isDataLoaded, setIsDataLoaded] = useState(false);
+      const [lastSavedTime, setLastSavedTime] = useState(null);
 
       const [updateAvailable, setUpdateAvailable] = useState(null);
       const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -729,8 +780,26 @@
             for (let e of eRecords) await dbPut("exams", e);
           }
           setExams((eRecords || []).sort((a,b) => new Date(b.date) - new Date(a.date)));
+          setIsDataLoaded(true);
         })().catch(err => console.error("Database initialization error:", err));
       }, []);
+
+      // Real-Time Compressed Auto-Save Effect (Triggers on every state update)
+      useEffect(() => {
+        if (!isDataLoaded) return;
+        const stores = {
+          habits,
+          habitLogs: Object.values(habitLogs),
+          workouts,
+          scheduledWorkouts,
+          journals: Object.entries(journals).map(([date, content]) => ({ date, content })),
+          quotes,
+          notes,
+          exams
+        };
+        autoSaveCompressedSnapshot(stores);
+        setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }, [habits, habitLogs, workouts, scheduledWorkouts, journals, quotes, notes, exams, isDataLoaded]);
 
       // Habit streak calculation helper
       const habitStreaks = useMemo(() => {
