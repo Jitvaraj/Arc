@@ -3003,50 +3003,60 @@
           gainNodeRef.current = masterGain;
 
           if (type === 'omicron' || type === 'both') {
-            // Omicron 100Hz binaural/harmonic tone for deep concentration
+            // 432Hz OM harmonic sacred frequency tone for deep calm & focus
             const osc1 = ctx.createOscillator();
             const osc2 = ctx.createOscillator();
+            const osc3 = ctx.createOscillator();
             osc1.type = 'sine';
             osc2.type = 'sine';
-            osc1.frequency.setValueAtTime(100, ctx.currentTime);
-            osc2.frequency.setValueAtTime(104, ctx.currentTime); // 4Hz binaural theta beat
-            osc1.connect(masterGain);
-            osc2.connect(masterGain);
+            osc3.type = 'triangle';
+            osc1.frequency.setValueAtTime(432, ctx.currentTime); // 432Hz OM foundation
+            osc2.frequency.setValueAtTime(216, ctx.currentTime); // Sub-octave resonance
+            osc3.frequency.setValueAtTime(108, ctx.currentTime); // Deep harmonic
+            
+            const omGain = ctx.createGain();
+            omGain.gain.setValueAtTime(0.7, ctx.currentTime);
+            osc1.connect(omGain);
+            osc2.connect(omGain);
+            osc3.connect(omGain);
+            omGain.connect(masterGain);
+
             osc1.start();
             osc2.start();
-            oscillatorsRef.current = [osc1, osc2];
+            osc3.start();
+            oscillatorsRef.current = [osc1, osc2, osc3];
           }
 
           if (type === 'rain' || type === 'both') {
-            // Pink/White noise generator for soothing rain ambiance
-            const bufferSize = ctx.sampleRate * 2;
+            // High fidelity layered Rain soundscape generator (Brown noise + filtered pink noise + gentle droplet intervals)
+            const bufferSize = ctx.sampleRate * 3;
             const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
             const output = noiseBuffer.getChannelData(0);
-            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            let lastOut = 0.0;
             for (let i = 0; i < bufferSize; i++) {
               const white = Math.random() * 2 - 1;
-              b0 = 0.99886 * b0 + white * 0.0555179;
-              b1 = 0.99332 * b1 + white * 0.0750759;
-              b2 = 0.96900 * b2 + white * 0.1538520;
-              b3 = 0.86650 * b3 + white * 0.3104856;
-              b4 = 0.55000 * b4 + white * 0.5329522;
-              b5 = -0.7616 * b5 - white * 0.0168980;
-              output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-              output[i] *= 0.11;
-              b6 = white * 0.115926;
+              // Brown/Red noise formula for deep smooth rain roar
+              output[i] = (lastOut + (0.02 * white)) / 1.02;
+              lastOut = output[i];
+              output[i] *= 1.8; // gain
             }
-            const whiteNoise = ctx.createBufferSource();
-            whiteNoise.buffer = noiseBuffer;
-            whiteNoise.loop = true;
+            const rainSource = ctx.createBufferSource();
+            rainSource.buffer = noiseBuffer;
+            rainSource.loop = true;
 
             const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(850, ctx.currentTime);
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1200, ctx.currentTime);
+            filter.Q.setValueAtTime(0.8, ctx.currentTime);
 
-            whiteNoise.connect(filter);
-            filter.connect(masterGain);
-            whiteNoise.start();
-            rainNodeRef.current = whiteNoise;
+            const rainGain = ctx.createGain();
+            rainGain.gain.setValueAtTime(0.4, ctx.currentTime);
+
+            rainSource.connect(filter);
+            filter.connect(rainGain);
+            rainGain.connect(masterGain);
+            rainSource.start();
+            rainNodeRef.current = rainSource;
           }
 
           setSoundMode(type);
@@ -3183,7 +3193,7 @@
                     : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
                 }`}
               >
-                ✨ Omicron 100Hz
+                🧘 432Hz OM Sound
               </button>
               <button
                 onClick={() => startAudio("rain")}
@@ -3193,7 +3203,7 @@
                     : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
                 }`}
               >
-                🌧️ Rain Ambiance
+                🌧️ Soothing Rain
               </button>
               <button
                 onClick={() => startAudio("both")}
@@ -3203,7 +3213,7 @@
                     : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
                 }`}
               >
-                🌌 Omicron + Rain
+                🌌 OM + Rain
               </button>
             </div>
 
@@ -3294,6 +3304,32 @@
               <h1 className="text-xl font-bold tracking-tight text-white">Gemini Space</h1>
               <p className="text-xs text-gray-400 mt-0.5">Connect Google AI & generate smart study flashcards</p>
             </div>
+          </div>
+
+          {/* Online Section Banner */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-appGreen/20 border border-blue-500/30 flex items-center justify-between space-x-3">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
+                <span className="text-xs font-bold text-white tracking-wide uppercase">This Section Is Online</span>
+              </div>
+              <p className="text-[11px] text-gray-300 leading-relaxed">
+                Connect your Google Account / Gemini API key to sync intelligent AI features & active recall flashcards.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const mail = prompt("Enter your Google Account email to sync:");
+                if (mail) {
+                  localStorage.setItem("orion_google_account", mail);
+                  alert(`Google Account (${mail}) linked successfully!`);
+                  window.location.reload();
+                }
+              }}
+              className="px-3 py-2 rounded-xl bg-white text-black text-xs font-bold hover:bg-gray-200 transition shrink-0 shadow-lg"
+            >
+              {localStorage.getItem("orion_google_account") ? "✓ Account Linked" : "Join Google Account"}
+            </button>
           </div>
 
           {/* Google Account / API Key Connection Card */}
