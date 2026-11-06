@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4ADE80" stop-opacity="0.3"/>
+      <stop offset="60%" stop-color="#050505" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#050505" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="oRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="50%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Deep Black Background -->
+  <rect width="512" height="512" rx="128" fill="#050505"/>
+  <circle cx="256" cy="256" r="220" fill="url(#bgGlow)" />
+
+  <!-- Outer Orbit Track -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6" />
+
+  <!-- Vector Ring O -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="url(#oRingGrad)" stroke-width="36" stroke-linecap="round" filter="url(#neonGlow)" />
+
+  <!-- Orion Starburst Core -->
+  <circle cx="256" cy="116" r="14" fill="#FFFFFF" filter="url(#neonGlow)" />
+  <path d="M256 216 L262 250 L296 256 L262 262 L256 296 L250 262 L216 256 L250 250 Z" fill="#FFFFFF" />
+  <circle cx="256" cy="256" r="8" fill="#4ADE80" />
+</svg>

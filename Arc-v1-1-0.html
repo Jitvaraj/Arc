@@ -4,12 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#050505" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Orion" />
   <title>Orion — Personal Tracking</title>
   <meta name="description" content="Your Progress. Your Journey. Your Space. A modern glassmorphic personal tracking and productivity space built for students featuring multi-habit checklist, workout logging, notes, and local storage." />
   <meta property="og:title" content="Orion — Personal Tracking" />
   <meta property="og:description" content="Your Progress. Your Journey. Your Space. A modern glassmorphic personal tracking and productivity space built for students featuring multi-habit checklist, workout logging, notes, and local storage." />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Orion PWA ServiceWorker registered:', reg.scope))
+          .catch(err => console.warn('Orion PWA ServiceWorker registration failed:', err));
+      });
+    }
+  </script>
   <script>
     // Safe iframe fallbacks for alert and confirm
     const _origAlert = window.alert;
@@ -568,6 +582,52 @@
       const [showDateModal, setShowDateModal] = useState(false);
       const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+      // PWA Install Prompt State
+      const [deferredPrompt, setDeferredPrompt] = useState(null);
+      const [isAppInstalled, setIsAppInstalled] = useState(false);
+      const [isIOSDevice, setIsIOSDevice] = useState(false);
+      const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+      useEffect(() => {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        setIsAppInstalled(isStandalone);
+
+        const ua = window.navigator.userAgent.toLowerCase();
+        setIsIOSDevice(/iphone|ipad|ipod/.test(ua));
+
+        const handleBeforeInstall = (e) => {
+          e.preventDefault();
+          setDeferredPrompt(e);
+        };
+        const handleInstalled = () => {
+          setIsAppInstalled(true);
+          setDeferredPrompt(null);
+        };
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+        window.addEventListener('appinstalled', handleInstalled);
+
+        return () => {
+          window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+          window.removeEventListener('appinstalled', handleInstalled);
+        };
+      }, []);
+
+      const handleTriggerInstall = async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            setIsAppInstalled(true);
+            setDeferredPrompt(null);
+          }
+        } else if (isIOSDevice) {
+          setShowIOSGuide(true);
+        } else {
+          alert("To install Orion as an app, tap 'Add to Home Screen' or 'Install' in your browser menu options.");
+        }
+      };
+
       // Load initial data from IndexedDB
       useEffect(() => {
         (async () => {
@@ -817,12 +877,23 @@
           {/* Top Glassmorphic App Bar */}
           <header className="px-5 pt-3.5 pb-2.5 flex items-center justify-between text-xs text-gray-400 select-none border-b border-white/[0.08] bg-[#050505]/80 backdrop-blur-xl z-20 shrink-0">
             <div className="flex items-center space-x-2.5">
+              <img src="/icon.svg" className="w-5 h-5 rounded-md shadow-[0_0_10px_rgba(74,222,128,0.4)]" alt="Orion Emblem" />
               <span className="font-bold text-white tracking-widest text-[14px]">ORION</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-gray-300 border border-white/[0.06]">
                 v2.2
               </span>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2.5">
+              {!isAppInstalled && (
+                <button
+                  onClick={handleTriggerInstall}
+                  className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/30 transition flex items-center space-x-1"
+                  title="Install Orion App on Phone or PC"
+                >
+                  <span>📲</span>
+                  <span>Install</span>
+                </button>
+              )}
               <span className="text-[11px] text-gray-400 font-medium tracking-wide">
                 {today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
@@ -1009,7 +1080,35 @@
               onExport={handleExport}
               onImport={handleImport}
               onResetPresets={handleResetToPresets}
+              onTriggerInstall={handleTriggerInstall}
+              isAppInstalled={isAppInstalled}
             />
+          )}
+
+          {/* iOS Safari Install Guide Modal */}
+          {showIOSGuide && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-left">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <h3 className="text-sm font-semibold text-white">Install Orion on iPhone / iPad</h3>
+                  <button onClick={() => setShowIOSGuide(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  To install Orion as a native app on your iOS home screen:
+                </p>
+                <ol className="text-xs text-gray-300 space-y-2 list-decimal list-inside pl-1 font-medium">
+                  <li>Tap the <strong>Share</strong> button at the bottom of Safari.</li>
+                  <li>Scroll down and select <strong>Add to Home Screen</strong>.</li>
+                  <li>Tap <strong>Add</strong> in the top-right corner.</li>
+                </ol>
+                <button
+                  onClick={() => setShowIOSGuide(false)}
+                  className="w-full py-2.5 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition"
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Redesigned 5-Item Bottom Navigation */}
@@ -3643,7 +3742,7 @@
     // ==========================================
     // 8. SETTINGS & PRESETS MODAL
     // ==========================================
-    function SettingsModal({ onClose, onExport, onImport, onResetPresets }) {
+    function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled }) {
       return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
@@ -3653,10 +3752,22 @@
             </div>
 
             <p className="text-xs text-gray-400 leading-relaxed">
-              <strong>ARC v2.0</strong> operates completely offline with IndexedDB. No accounts, tracking, or remote telemetry exist.
+              <strong>ORION v2.2</strong> operates completely offline with IndexedDB. Install it directly as a native app on any device.
             </p>
 
             <div className="space-y-2 pt-1">
+              {!isAppInstalled && (
+                <button
+                  onClick={() => {
+                    onTriggerInstall();
+                    onClose();
+                  }}
+                  className="w-full py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/10"
+                >
+                  <span>📲 Install Orion App on Device</span>
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   onResetPresets();
@@ -3666,14 +3777,6 @@
               >
                 <span>⚡ Load Curated Presets</span>
               </button>
-
-              <a
-                href="/arc-v2.1.bundle"
-                download="arc-v2.1.bundle"
-                className="w-full py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-gray-300 text-xs font-medium hover:bg-white/[0.08] hover:text-white transition flex items-center justify-center space-x-1.5"
-              >
-                <span>📦 Download Git Bundle (v2.1)</span>
-              </a>
 
               <button
                 onClick={onExport}
@@ -3693,7 +3796,7 @@
               </label>
             </div>
 
-            <p className="text-[10px] text-gray-500 text-center">Version 2.1 · github.com/Jitvaraj/Arc</p>
+            <p className="text-[10px] text-gray-500 text-center">Orion v2.2 · Progressive Web App (PWA) · github.com/Jitvaraj/Orion-Forge</p>
           </div>
         </div>
       );
