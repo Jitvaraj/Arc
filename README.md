@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 ARC v2.1
+# 🚀 Orion v2.1
 
 **Your Progress. Your Journey. Your Space.**
 
@@ -21,7 +21,7 @@ A focused personal tracking, discipline, and academic productivity system built 
 
 - 🏫 **School vs Coaching Sections**: Dedicated filter tabs (`All`, `School`, `Coaching`) with dynamic academic average calculation.
 - ⚡ **Single-Subject Test Mode**: Log targeted subject tests (e.g. Physics Mock, 45/50) in one click with quick-select subject tags, alongside full multi-subject exams.
-- 📝 **Pre-Seeded Study Blueprints**: Actionable starter notes (ARC Protocol, Active Recall / Feynman Technique, Stoic Shinobi Mindset) to jumpstart your workspace.
+- 📝 **Pre-Seeded Study Blueprints**: Actionable starter notes (Orion Protocol, Active Recall / Feynman Technique, Stoic Shinobi Mindset) to jumpstart your workspace.
 - 💬 **Rank-Glow Quote Wall**: Full-card outline running through each quote card with radiant ambient glow corresponding to its rank tier (Gold, Silver, Bronze, Lapis, Ruby, Titanium, Azure, Amber).
 
 ---
@@ -57,7 +57,7 @@ A focused personal tracking, discipline, and academic productivity system built 
 
 ## 🔒 Privacy & Architecture
 
-- **💾 100% Local-First Storage**: Zero cloud dependencies or surveillance trackers. All habits, exam scores, notes, and workouts are saved directly into your browser's IndexedDB (`ArcPersonalDB`).
+- **💾 100% Local-First Storage**: Zero cloud dependencies or surveillance trackers. All habits, exam scores, notes, and workouts are saved directly into your browser's IndexedDB (`OrionPersonalDB`).
 - **📦 Backup & Restore**: One-click JSON data export and import for seamless migration across browsers or devices.
 - **⚡ Zero Build Friction**: Runs as a modern standalone web application with Tailwind CSS and React engine.
 
@@ -65,6 +65,6 @@ A focused personal tracking, discipline, and academic productivity system built 
 
 <div align="center">
 
-🚀 **ARC v2.1.0** · *Small steps. Consistent effort. Visible progress.*
+🚀 **Orion v2.1.0** · *Small steps. Consistent effort. Visible progress.*
 
 </div>
