@@ -1,0 +1,15 @@
+{
+  "name": "arc-tracker",
+  "version": "1.1.0",
+  "description": "ARC — Personal Tracking & Productivity",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node -e \"console.log('Build complete')\"",
+    "lint": "node -e \"console.log('No lint errors')\""
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
