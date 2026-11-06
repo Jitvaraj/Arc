@@ -629,6 +629,7 @@
       const [selectedDate, setSelectedDate] = useState(new Date());
       const [showDateModal, setShowDateModal] = useState(false);
       const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [showInstallGuideModal, setShowInstallGuideModal] = useState(false);
 
       // PWA Install & Version Check State
       const CURRENT_VERSION = "2.2.4";
@@ -1094,6 +1095,7 @@
                 <MoreSection
                   onNavigate={(tab) => setActiveTab(tab)}
                   onOpenSettings={() => setShowSettingsModal(true)}
+                  onOpenInstallGuide={() => setShowInstallGuideModal(true)}
                 />
               )}
 
@@ -1201,6 +1203,20 @@
               isAppInstalled={isAppInstalled}
               onCheckUpdates={() => checkForUpdates(true)}
               checkingUpdate={checkingUpdate}
+              currentVersion={CURRENT_VERSION}
+              onOpenInstallGuide={() => {
+                setShowSettingsModal(false);
+                setShowInstallGuideModal(true);
+              }}
+            />
+          )}
+
+          {/* App Installation & GitHub Files Guide Modal */}
+          {showInstallGuideModal && (
+            <InstallGuideModal
+              onClose={() => setShowInstallGuideModal(false)}
+              onTriggerInstall={handleTriggerInstall}
+              isAppInstalled={isAppInstalled}
               currentVersion={CURRENT_VERSION}
             />
           )}
@@ -3839,7 +3855,7 @@
     // ==========================================
     // 10. MORE SECTION (FEATURE HUB)
     // ==========================================
-    function MoreSection({ onNavigate, onOpenSettings }) {
+    function MoreSection({ onNavigate, onOpenSettings, onOpenInstallGuide }) {
       const items = [
         {
           id: "gemini",
@@ -3847,6 +3863,13 @@
           desc: "Google AI assistance, active recall & flashcard generator",
           icon: <IconSpark />,
           color: "border-blue-500/30 bg-blue-500/10 text-blue-400"
+        },
+        {
+          id: "install-guide",
+          title: "App Installation & GitHub Links",
+          desc: "Step-by-step installation for Android APK, PWA, Windows & direct GitHub file links",
+          icon: <span className="text-base">🚀</span>,
+          color: "border-teal-500/30 bg-teal-500/10 text-teal-400"
         },
         {
           id: "notes",
@@ -3872,7 +3895,7 @@
         {
           id: "settings",
           title: "Settings & Data",
-          desc: "Offline backup, restore, git bundle & starter presets",
+          desc: "Offline backup, restore, auto-save engine & starter presets",
           icon: <IconSettings />,
           color: "border-gray-500/30 bg-gray-500/10 text-gray-400"
         }
@@ -3891,6 +3914,7 @@
                 key={item.id}
                 onClick={() => {
                   if (item.id === "settings") onOpenSettings();
+                  else if (item.id === "install-guide") onOpenInstallGuide();
                   else onNavigate(item.id);
                 }}
                 className={`p-4 rounded-2xl glass-panel border ${item.color.split(' ')[0]} hover:bg-white/[0.06] active:scale-[0.99] transition text-left flex items-start space-x-3.5 group shadow-lg`}
@@ -3913,9 +3937,237 @@
     }
 
     // ==========================================
+    // 7.5 APP INSTALLATION & GITHUB LINKS MODAL
+    // ==========================================
+    function InstallGuideModal({ onClose, onTriggerInstall, isAppInstalled, currentVersion }) {
+      const [activeGuideTab, setActiveGuideTab] = useState("all");
+
+      const githubRepoUrl = "https://github.com/Jitvaraj/Orion-Forge";
+      const githubReleasesUrl = "https://github.com/Jitvaraj/Orion-Forge/releases";
+      const rawBaseUrl = "https://raw.githubusercontent.com/Jitvaraj/Orion-Forge/main";
+
+      const rawFiles = [
+        { name: "version.json", label: "App Version Checker", url: `${rawBaseUrl}/version.json` },
+        { name: "manifest.json", label: "PWA Web App Manifest", url: `${rawBaseUrl}/manifest.json` },
+        { name: "sw.js", label: "PWA Service Worker", url: `${rawBaseUrl}/sw.js` },
+        { name: "capacitor.config.json", label: "Android Capacitor Config", url: `${rawBaseUrl}/capacitor.config.json` },
+        { name: "index.html", label: "Main App Single-File Code", url: `${rawBaseUrl}/index.html` }
+      ];
+
+      return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#111827] border border-white/[0.12] rounded-2xl p-5 max-w-md w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none text-left">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">🚀</span>
+                <div>
+                  <h3 className="text-sm font-bold text-white">App Installation & GitHub Files Guide</h3>
+                  <p className="text-[10px] text-emerald-400 font-mono">ORION v{currentVersion || "2.2.4"} · Cross-Platform Support</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="text-gray-400 hover:text-white text-xs p-1 rounded-lg bg-white/[0.05]">✕</button>
+            </div>
+
+            {/* Filter Category Pills */}
+            <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { id: "all", label: "All Devices" },
+                { id: "android", label: "🤖 Android" },
+                { id: "pwa", label: "🌐 Web/PWA" },
+                { id: "windows", label: "💻 Windows" },
+                { id: "ios", label: "🍎 iOS Safari" },
+                { id: "github", label: "🐙 GitHub Files" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveGuideTab(tab.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition ${
+                    activeGuideTab === tab.id
+                      ? "bg-appGreen text-black shadow-md shadow-green-500/20"
+                      : "bg-white/[0.06] text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Actions Row */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <a
+                href={githubReleasesUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:from-emerald-500/30 hover:to-teal-500/30 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-green-500/10"
+              >
+                <span>📦 GitHub Releases</span>
+                <span className="text-[10px]">↗</span>
+              </a>
+              <button
+                onClick={() => {
+                  onTriggerInstall();
+                }}
+                className="py-2.5 px-3 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>📲 Install Web PWA</span>
+              </button>
+            </div>
+
+            {/* 1. Android APK Installation Guide */}
+            {(activeGuideTab === "all" || activeGuideTab === "android") && (
+              <div className="p-3.5 rounded-xl bg-black/60 border border-emerald-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">🤖</span>
+                    <h4 className="text-xs font-bold text-white">Android Application (.APK)</h4>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Capacitor Native</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Bundled as a standalone native Android app via Capacitor. Runs offline without needing an app store account.
+                </p>
+                <ol className="text-[11px] text-gray-300 space-y-1.5 list-decimal list-inside bg-white/[0.03] p-2.5 rounded-lg border border-white/[0.05]">
+                  <li>Go to <strong>GitHub Releases</strong> page using the button above.</li>
+                  <li>Download the latest <strong>orion-v{currentVersion || "2.2.4"}-android.apk</strong> file.</li>
+                  <li>Tap the downloaded file on your device and select <strong>Install</strong> (Enable "Install from Unknown Sources" if prompted).</li>
+                  <li>Launch Orion from your phone's app drawer!</li>
+                </ol>
+              </div>
+            )}
+
+            {/* 2. Web & PWA Installation Guide */}
+            {(activeGuideTab === "all" || activeGuideTab === "pwa") && (
+              <div className="p-3.5 rounded-xl bg-black/60 border border-blue-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">🌐</span>
+                    <h4 className="text-xs font-bold text-white">Progressive Web App (PWA)</h4>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Auto Sync</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Runs directly in your browser on Android, Windows, Mac, or Linux with offline ServiceWorker caching.
+                </p>
+                <ul className="text-[11px] text-gray-300 space-y-1.5 list-disc list-inside bg-white/[0.03] p-2.5 rounded-lg border border-white/[0.05]">
+                  <li><strong>Desktop (Chrome / Edge / Brave):</strong> Click the install icon (📥) in your browser address bar or click "Install Web PWA" above.</li>
+                  <li><strong>Android (Chrome / Samsung Internet):</strong> Tap the 3 dots menu ➔ Select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.</li>
+                  <li>Updates apply automatically when hosting files change on GitHub Pages!</li>
+                </ul>
+              </div>
+            )}
+
+            {/* 3. Windows Desktop Guide */}
+            {(activeGuideTab === "all" || activeGuideTab === "windows") && (
+              <div className="p-3.5 rounded-xl bg-black/60 border border-purple-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">💻</span>
+                    <h4 className="text-xs font-bold text-white">Windows Desktop App (.Zip / .Exe)</h4>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Electron Desktop</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Packaged into a Windows desktop application using Electron with offline local storage.
+                </p>
+                <ol className="text-[11px] text-gray-300 space-y-1.5 list-decimal list-inside bg-white/[0.03] p-2.5 rounded-lg border border-white/[0.05]">
+                  <li>Download <strong>orion-v{currentVersion || "2.2.4"}-windows.zip</strong> from GitHub Releases.</li>
+                  <li>Extract the zip folder to your preferred folder (e.g., <code>C:\Program Files\Orion</code>).</li>
+                  <li>Run <code>Orion.exe</code> or pin it to your Windows Start Menu / Taskbar.</li>
+                </ol>
+              </div>
+            )}
+
+            {/* 4. iOS / iPad OS Guide */}
+            {(activeGuideTab === "all" || activeGuideTab === "ios") && (
+              <div className="p-3.5 rounded-xl bg-black/60 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">🍎</span>
+                    <h4 className="text-xs font-bold text-white">iPhone & iPad (iOS Safari PWA)</h4>
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">iOS WebKit</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Apple iOS supports full PWA home screen installation through Mobile Safari.
+                </p>
+                <ol className="text-[11px] text-gray-300 space-y-1.5 list-decimal list-inside bg-white/[0.03] p-2.5 rounded-lg border border-white/[0.05]">
+                  <li>Open the live website in <strong>Safari</strong> on iPhone or iPad.</li>
+                  <li>Tap the <strong>Share icon</strong> (square with arrow up) at the bottom toolbar.</li>
+                  <li>Scroll down and select <strong>"Add to Home Screen"</strong>.</li>
+                  <li>Tap <strong>Add</strong> in top-right corner to launch in standalone full-screen mode!</li>
+                </ol>
+              </div>
+            )}
+
+            {/* 5. GitHub Repository & Raw Files Links */}
+            {(activeGuideTab === "all" || activeGuideTab === "github") && (
+              <div className="p-3.5 rounded-xl bg-black/60 border border-white/[0.12] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-base">🐙</span>
+                    <h4 className="text-xs font-bold text-white">GitHub Repository & Raw Files</h4>
+                  </div>
+                  <a
+                    href={githubRepoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-appGreen font-semibold hover:underline"
+                  >
+                    View Repository ↗
+                  </a>
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Direct Raw GitHub File Links</span>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto scrollbar-none pr-1">
+                    {rawFiles.map((rf, idx) => (
+                      <a
+                        key={idx}
+                        href={rf.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.08] hover:border-emerald-500/40 transition flex items-center justify-between text-xs group"
+                      >
+                        <div className="truncate pr-2">
+                          <span className="font-mono text-emerald-400 font-bold block">{rf.name}</span>
+                          <span className="text-[10px] text-gray-400 truncate block">{rf.label}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-gray-500 group-hover:text-emerald-300 shrink-0">RAW ↗</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Developer Terminal Commands */}
+                <div className="space-y-1.5 pt-1 border-t border-white/[0.08]">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Developer Self-Hosting & Build Commands</span>
+                  <div className="p-2.5 rounded-lg bg-black/80 font-mono text-[10px] text-emerald-300 space-y-1 border border-white/[0.06] overflow-x-auto">
+                    <div>git clone https://github.com/Jitvaraj/Orion-Forge.git</div>
+                    <div>cd Orion-Forge && npm install</div>
+                    <div>npm run dev # Launches local server</div>
+                    <div>npx cap build android # Builds Android APK</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition shadow-lg shadow-green-500/20"
+            >
+              Close Guide
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
     // 8. SETTINGS & PRESETS MODAL
     // ==========================================
-    function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled, onCheckUpdates, checkingUpdate, currentVersion }) {
+    function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled, onCheckUpdates, checkingUpdate, currentVersion, onOpenInstallGuide }) {
       return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none">
@@ -3925,14 +4177,24 @@
             </div>
 
             <p className="text-xs text-gray-400 leading-relaxed">
-              <strong>ORION v{currentVersion || "2.2.2"}</strong> operates completely offline with IndexedDB. Install it on Android, Windows, or iOS.
+              <strong>ORION v{currentVersion || "2.2.4"}</strong> operates completely offline with IndexedDB. Install it on Android, Windows, or iOS.
             </p>
+
+            {/* View Guide Button */}
+            <button
+              onClick={() => {
+                if (onOpenInstallGuide) onOpenInstallGuide();
+              }}
+              className="w-full py-2.5 rounded-xl bg-teal-500/20 border border-teal-500/40 text-teal-300 text-xs font-bold hover:bg-teal-500/30 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-teal-500/10"
+            >
+              <span>📖 Full Installation & GitHub Files Guide</span>
+            </button>
 
             {/* Version Update Checker Section */}
             <div className="p-3 rounded-xl bg-black/60 border border-white/[0.08] space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">App Updates</span>
-                <span className="text-[10px] font-mono text-emerald-400">v{currentVersion || "2.2.2"}</span>
+                <span className="text-[10px] font-mono text-emerald-400">v{currentVersion || "2.2.4"}</span>
               </div>
               <button
                 onClick={onCheckUpdates}
@@ -4018,7 +4280,7 @@
               </label>
             </div>
 
-            <p className="text-[10px] text-gray-500 text-center">Orion v{currentVersion || "2.2.2"} · Progressive Web App (PWA) · github.com/Jitvaraj/Orion-Forge</p>
+            <p className="text-[10px] text-gray-500 text-center">Orion v{currentVersion || "2.2.4"} · Progressive Web App (PWA) · github.com/Jitvaraj/Orion-Forge</p>
           </div>
         </div>
       );
