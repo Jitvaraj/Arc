@@ -1,68 +1,70 @@
-<div align="center">🚀 ARC
+<div align="center">
 
-Your Progress. Your Journey. Your Space.
+# 🚀 ARC v2.1
 
-A personal tracking and productivity space built for students.
+**Your Progress. Your Journey. Your Space.**
 
-![Version](https://img.shields.io/badge/version-1.1.0-7C9E87?style=for-the-badge)
-![Release](https://img.shields.io/badge/release-initial-64748b?style=for-the-badge)
-![Platform](https://img.shields.io/badge/platform-web-334155?style=for-the-badge)
-![Privacy](https://img.shields.io/badge/privacy-local--first-16a085?style=for-the-badge)
+A focused personal tracking, discipline, and academic productivity system built for high-performance students.
 
----
-
-Track your progress. Build consistency. Keep moving forward.
-
-</div>📊 Core Features
-
-🎓 Exam Marks Dashboard
-
-- Separate tracking for Coaching Exams and Tuition Exams.
-- Performance summaries and average score trends.
-- Quick highlights for highest marks and total exams taken.
-
-🎯 Productivity & Habit Tracker
-
-- Simple daily check-ins to monitor habits.
-- Track active streaks and daily consistency.
-- Calendar-based activity overview.
-
-🛠️ Loggers & Utilities
-
-Feature| Description
-🏋️ Workout Tracker| Log exercises, weight, sets, and repetitions.
-📝 Notes App| Organise study plans, personal tasks, and random ideas.
-💬 Quote Wall| Save, pin, and manually rank your favourite quotes.
-🗓️ Calendar| Plan your days and schedule future activities.
+![Version](https://img.shields.io/badge/version-2.1.0-4ADE80?style=for-the-badge)
+![Aesthetic](https://img.shields.io/badge/ui-dark_glassmorphism-111827?style=for-the-badge)
+![Platform](https://img.shields.io/badge/platform-web_standalone-334155?style=for-the-badge)
+![Privacy](https://img.shields.io/badge/privacy-indexedDB_local_first-16a085?style=for-the-badge)
 
 ---
 
-🔒 Privacy & Data
+*Track your progress. Build consistency. Keep moving forward.*
 
-- 💾 Local Storage: Data is stored locally using IndexedDB.
-- ☁️ No Cloud Account: No account or cloud sync is required.
-- 🔐 Personal Data: Your records remain in your local browser storage.
-- 📦 Backups: Export your data to keep a separate backup.
+</div>
 
-«[!NOTE]
-Saved records are local, but the current app loads some libraries from external CDNs. An internet connection may be needed when loading the app.»
+## 🌟 What's New in v2.1
 
----
-
-🌌 The Philosophy Behind Arc
-
-«Small steps. Consistent effort. Visible progress.»
-
-Arc is built around a simple idea: progress becomes easier to understand when you can see it.
-
-Whether you're improving your academics, building habits, or organising your daily life, Arc gives you one space to follow your journey.
+- 🏫 **School vs Coaching Sections**: Dedicated filter tabs (`All`, `School`, `Coaching`) with dynamic academic average calculation.
+- ⚡ **Single-Subject Test Mode**: Log targeted subject tests (e.g. Physics Mock, 45/50) in one click with quick-select subject tags, alongside full multi-subject exams.
+- 📝 **Pre-Seeded Study Blueprints**: Actionable starter notes (ARC Protocol, Active Recall / Feynman Technique, Stoic Shinobi Mindset) to jumpstart your workspace.
+- 💬 **Rank-Glow Quote Wall**: Full-card outline running through each quote card with radiant ambient glow corresponding to its rank tier (Gold, Silver, Bronze, Lapis, Ruby, Titanium, Azure, Amber).
 
 ---
 
-<div align="center">🚀 ARC v1.0.0
+## 📊 Core Features
 
-Start where you are. Track where you go.
+### 🎓 1. Academic Exam & Test Dashboard
+- Separate categorization for **School Exams** and **Coaching Tests**.
+- Interactive Circular Radial Gauge displaying academic average % and total mark accumulation.
+- Quick single-subject test logging + multi-subject exam tracking with individual mark breakdowns.
 
-Made for progress.
+### 🎯 2. Multi-Habit Consistency Engine
+- Multi-habit daily checklist with individual streak counters and 7-day consistency indicators.
+- Daily completion gauge and qualitative daily reflection logging.
+- Pre-loaded with *Deep Work & Focus* and *Physical Training*.
+
+### 🏋️ 3. Workout & Hypertrophy Tracker
+- Log exercises, weight, sets, repetitions, and performance notes.
+- Pre-loaded with bodyweight calisthenics & dumbbell hypertrophy routines.
+- Schedule future workouts with date and time tags.
+
+### 💬 4. Curated Ranked Quote Wall
+- Wisdom collection curated from Itachi Uchiha, Naruto Uzumaki, Madara Uchiha, Kakashi Hatake, Seneca, Marcus Aurelius, and Miyamoto Musashi.
+- Rank-colored outlines running through each card with ambient aura and tier badges.
+
+### 📝 5. Study Notes & Scratchpad
+- Quick-searchable personal notes, derivation steps, and revision blueprints.
+
+### 🗓️ 6. Calendar & Daily Journal
+- Interactive day details modal with reflections, scheduled workout timelines, and habit activity overview.
+
+---
+
+## 🔒 Privacy & Architecture
+
+- **💾 100% Local-First Storage**: Zero cloud dependencies or surveillance trackers. All habits, exam scores, notes, and workouts are saved directly into your browser's IndexedDB (`ArcPersonalDB`).
+- **📦 Backup & Restore**: One-click JSON data export and import for seamless migration across browsers or devices.
+- **⚡ Zero Build Friction**: Runs as a modern standalone web application with Tailwind CSS and React engine.
+
+---
+
+<div align="center">
+
+🚀 **ARC v2.1.0** · *Small steps. Consistent effort. Visible progress.*
 
 </div>

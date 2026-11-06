@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#080808" />
+  <meta name="theme-color" content="#050505" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>ARC — Personal Tracking</title>
-  <meta name="description" content="Your Progress. Your Journey. Your Space. A personal tracking and productivity space built for students featuring exam dashboard, habits, workout logging, notes, and local storage." />
+  <meta name="description" content="Your Progress. Your Journey. Your Space. A modern glassmorphic personal tracking and productivity space built for students featuring multi-habit checklist, workout logging, notes, and local storage." />
   <meta property="og:title" content="ARC — Personal Tracking" />
-  <meta property="og:description" content="Your Progress. Your Journey. Your Space. A personal tracking and productivity space built for students featuring exam dashboard, habits, workout logging, notes, and local storage." />
+  <meta property="og:description" content="Your Progress. Your Journey. Your Space. A modern glassmorphic personal tracking and productivity space built for students featuring multi-habit checklist, workout logging, notes, and local storage." />
   <script>
     // Safe iframe fallbacks for alert and confirm
     const _origAlert = window.alert;
@@ -30,6 +30,7 @@
       }
     };
   </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -37,37 +38,39 @@
       theme: {
         extend: {
           colors: {
-            appDark: '#080808',
+            appDark: '#050505',
             appCard: '#121212',
             appCardHover: '#181818',
-            appBorder: '#222222',
+            appBorder: 'rgba(255, 255, 255, 0.08)',
             appGreen: '#4ADE80',
-            appGreenMuted: '#22543D',
-            appGreenSubtle: 'rgba(74, 222, 128, 0.1)',
+            appGreenMuted: '#166534',
+            appGreenSubtle: 'rgba(74, 222, 128, 0.12)',
             rankGold: '#FFD700',
             rankSilver: '#C0C0C0',
             rankBronze: '#CD7F32',
             rankLapis: '#3B82F6',
-            rankRuby: '#E11D48'
+            rankRuby: '#E11D48',
+            rankTitanium: '#9CA3AF',
+            rankAzure: '#22D3EE',
+            rankAmber: '#F59E0B'
           }
         }
       }
     };
   </script>
 
-  <!-- React & Babel for standalone mobile execution -->
+  <!-- React & Babel for standalone execution -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* Robust Mobile First & Offline CSS Fallbacks */
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
     }
     html, body {
-      background-color: #080808;
+      background-color: #050505;
       color: #f3f4f6;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
@@ -91,26 +94,43 @@
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+    /* Modern Glass Surface Shadows */
+    .glass-panel {
+      background: rgba(18, 18, 18, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-tile {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
   </style>
 </head>
-<body class="bg-[#080808] text-gray-100 antialiased">
+<body class="bg-[#050505] text-gray-100 antialiased">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // --- IndexedDB Safe Engine ---
+    // --- IndexedDB Safe Engine (ArcPersonalDB v2) ---
     const DB_NAME = "ArcPersonalDB";
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
 
     function openDatabase() {
       return new Promise((resolve, reject) => {
         try {
+          if (typeof indexedDB === "undefined") {
+            return reject(new Error("IndexedDB is not supported in this browser"));
+          }
           const req = indexedDB.open(DB_NAME, DB_VERSION);
           req.onupgradeneeded = (e) => {
-            const db = e.target.result;
+            const db = (e && e.target ? e.target.result : null) || req.result;
+            if (!db) return;
             if (!db.objectStoreNames.contains("journals")) db.createObjectStore("journals", { keyPath: "date" });
             if (!db.objectStoreNames.contains("tracker")) db.createObjectStore("tracker", { keyPath: "date" });
+            if (!db.objectStoreNames.contains("habits")) db.createObjectStore("habits", { keyPath: "id" });
+            if (!db.objectStoreNames.contains("habitLogs")) db.createObjectStore("habitLogs", { keyPath: "date" });
             if (!db.objectStoreNames.contains("workouts")) db.createObjectStore("workouts", { keyPath: "id" });
             if (!db.objectStoreNames.contains("scheduledWorkouts")) db.createObjectStore("scheduledWorkouts", { keyPath: "id" });
             if (!db.objectStoreNames.contains("quotes")) db.createObjectStore("quotes", { keyPath: "id" });
@@ -118,8 +138,8 @@
             if (!db.objectStoreNames.contains("exams")) db.createObjectStore("exams", { keyPath: "id" });
             if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath: "key" });
           };
-          req.onsuccess = () => resolve(req.target.result);
-          req.onerror = () => reject(req.error);
+          req.onsuccess = (e) => resolve(req.result || (e && e.target ? e.target.result : null));
+          req.onerror = (e) => reject(req.error || (e && e.target ? e.target.error : new Error("IndexedDB error")));
         } catch (e) {
           reject(e);
         }
@@ -133,8 +153,8 @@
           const tx = db.transaction(storeName, "readonly");
           const store = tx.objectStore(storeName);
           const req = store.getAll();
-          req.onsuccess = () => res(req.result || []);
-          req.onerror = () => rej(req.error);
+          req.onsuccess = (e) => res(req.result || (e && e.target ? e.target.result : []));
+          req.onerror = (e) => rej(req.error || (e && e.target ? e.target.error : new Error("getAll error")));
         });
       } catch (err) {
         return JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
@@ -148,8 +168,8 @@
           const tx = db.transaction(storeName, "readwrite");
           const store = tx.objectStore(storeName);
           const req = store.put(item);
-          req.onsuccess = () => res(req.result);
-          req.onerror = () => rej(req.error);
+          req.onsuccess = (e) => res(req.result || (e && e.target ? e.target.result : null));
+          req.onerror = (e) => rej(req.error || (e && e.target ? e.target.error : new Error("put error")));
         });
       } catch (err) {
         const existing = JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
@@ -168,7 +188,7 @@
           const store = tx.objectStore(storeName);
           const req = store.delete(key);
           req.onsuccess = () => res();
-          req.onerror = () => rej(req.error);
+          req.onerror = (e) => rej(req.error || (e && e.target ? e.target.error : new Error("delete error")));
         });
       } catch (err) {
         let existing = JSON.parse(localStorage.getItem(`arc_${storeName}`) || "[]");
@@ -198,17 +218,286 @@
 
     const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    // --- Minimal Icons ---
+    // Helper: generate last N days keys leading up to a target date
+    const getLastNDaysKeys = (baseDate, n = 7) => {
+      const keys = [];
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(baseDate);
+        d.setDate(d.getDate() - i);
+        keys.push(formatDateKey(d));
+      }
+      return keys;
+    };
+
+    // --- Curated Presets ---
+    const STARTER_HABITS = [
+      {
+        id: "h_deepwork",
+        name: "Deep Work & Daily Physical Training",
+        category: "Focus & Body",
+        icon: "⚡",
+        targetDays: 7
+      },
+      {
+        id: "h_hypertrophy",
+        name: "Bodyweight & Dumbbell Hypertrophy",
+        category: "Physical",
+        icon: "💪",
+        targetDays: 5
+      },
+      {
+        id: "h_reading",
+        name: "Deep Reading & Skill Study",
+        category: "Mindset",
+        icon: "📚",
+        targetDays: 7
+      },
+      {
+        id: "h_hydration",
+        name: "Hydration & Morning Cold Shower",
+        category: "Health",
+        icon: "💧",
+        targetDays: 7
+      },
+      {
+        id: "h_curfew",
+        name: "Evening Reflection & Digital Curfew",
+        category: "Recovery",
+        icon: "🌙",
+        targetDays: 7
+      }
+    ];
+
+    const STARTER_QUOTES = [
+      {
+        id: "q_preset_1",
+        text: "Time doesn't heal anything, it just teaches you how to live with pain.",
+        author: "Itachi Uchiha",
+        rank: 1
+      },
+      {
+        id: "q_preset_2",
+        text: "If you do not like your destiny, don't accept it. Instead, have the courage to change it.",
+        author: "Naruto Uzumaki",
+        rank: 2
+      },
+      {
+        id: "q_preset_3",
+        text: "In this world, wherever there is light - there are also shadows.",
+        author: "Madara Uchiha",
+        rank: 3
+      },
+      {
+        id: "q_preset_4",
+        text: "People live their lives bound by what they accept as correct and true... That is how they define reality.",
+        author: "Itachi Uchiha",
+        rank: 4
+      },
+      {
+        id: "q_preset_5",
+        text: "Those who break the rules are scum, but those who abandon their friends are worse than scum.",
+        author: "Kakashi Hatake",
+        rank: 5
+      },
+      {
+        id: "q_preset_6",
+        text: "We do not lack days, but rather we waste much of them.",
+        author: "Seneca",
+        rank: 6
+      },
+      {
+        id: "q_preset_7",
+        text: "You have power over your mind - not outside events. Realize this, and you will find strength.",
+        author: "Marcus Aurelius",
+        rank: 7
+      },
+      {
+        id: "q_preset_8",
+        text: "There is nothing outside of yourself that can ever enable you to get better, stronger, richer, quicker, or smarter. Everything is within.",
+        author: "Miyamoto Musashi",
+        rank: 8
+      }
+    ];
+
+    function getStarterWorkouts() {
+      const todayStr = formatDateKey(new Date());
+      const d1 = new Date(); d1.setDate(d1.getDate() - 1);
+      const d2 = new Date(); d2.setDate(d2.getDate() - 2);
+      const d3 = new Date(); d3.setDate(d3.getDate() - 3);
+      const d4 = new Date(); d4.setDate(d4.getDate() - 4);
+      return [
+        {
+          id: "w_preset_1",
+          exerciseName: "Dumbbell Chest Press & Deficit Push-Ups",
+          weight: 22,
+          sets: 4,
+          reps: 10,
+          notes: "Superset: Heavy dumbbell press paired with strict bodyweight deficit push-ups for chest & triceps hypertrophy.",
+          date: todayStr
+        },
+        {
+          id: "w_preset_2",
+          exerciseName: "Weighted / Bodyweight Pull-Ups",
+          weight: 5,
+          sets: 4,
+          reps: 8,
+          notes: "Chest to bar, full dead-hang at bottom. 2-second eccentric contraction for maximum lat width.",
+          date: todayStr
+        },
+        {
+          id: "w_preset_3",
+          exerciseName: "Single-Arm Dumbbell Rows",
+          weight: 24,
+          sets: 4,
+          reps: 10,
+          notes: "Strict form, pull dumbbell to hip pocket, pause 1s at peak contraction for rhomboid & lat thickness.",
+          date: formatDateKey(d1)
+        },
+        {
+          id: "w_preset_4",
+          exerciseName: "Dumbbell Goblet Squats & Bulgarian Split Squats",
+          weight: 26,
+          sets: 4,
+          reps: 12,
+          notes: "Deep knee flexion, upright torso. Unilateral leg mass building.",
+          date: formatDateKey(d1)
+        },
+        {
+          id: "w_preset_5",
+          exerciseName: "Dumbbell Standing Overhead Press",
+          weight: 16,
+          sets: 3,
+          reps: 10,
+          notes: "Lockout overhead with neutral spine. Finish with dumbbell lateral raises for 3D shoulder width.",
+          date: formatDateKey(d2)
+        },
+        {
+          id: "w_preset_6",
+          exerciseName: "Dumbbell Romanian Deadlifts (RDL)",
+          weight: 22,
+          sets: 4,
+          reps: 10,
+          notes: "Hinge at hips, slight knee bend, deep stretch across hamstrings and glutes.",
+          date: formatDateKey(d2)
+        },
+        {
+          id: "w_preset_7",
+          exerciseName: "Incline Bicep Curls & Overhead Tricep Extensions",
+          weight: 14,
+          sets: 3,
+          reps: 12,
+          notes: "Strict isolation arm volume with full elbow flexion and extension.",
+          date: formatDateKey(d3)
+        },
+        {
+          id: "w_preset_8",
+          exerciseName: "Hollow Body Holds & Hanging Knee Raises",
+          weight: 0,
+          sets: 4,
+          reps: 15,
+          notes: "Gymnastics core compression and pelvic tilt control.",
+          date: formatDateKey(d4)
+        }
+      ];
+    }
+
+    function getStarterScheduled() {
+      const tm = new Date(); tm.setDate(tm.getDate() + 1);
+      const da = new Date(); da.setDate(da.getDate() + 2);
+      return [
+        {
+          id: "sw_preset_1",
+          title: "Dumbbell Upper Hypertrophy & Dips",
+          date: formatDateKey(tm),
+          time: "07:30",
+          details: "Chest Press, Deficit Push-ups, Overhead Press & Biceps"
+        },
+        {
+          id: "sw_preset_2",
+          title: "Pull-Ups & Dumbbell Leg Volume",
+          date: formatDateKey(da),
+          time: "07:30",
+          details: "Weighted Pull-Ups, Single-Arm Rows, Goblet Squats & RDL"
+        }
+      ];
+    }
+
+    const STARTER_NOTES = [
+      {
+        id: "n_preset_1",
+        title: "ARC Protocol · Daily Deep Work & Cadence",
+        content: "1. 90-Minute Focus Block: Zero notifications, phone in another room, full attention on the hardest technical problem or conceptual chapter.\n2. Active Recall over Passive Reading: Close book/notes after reading and summarize key concepts from memory.\n3. Daily Physical Grounding: Push-ups, pull-ups, squats, or dumbbell work to re-energize mental stamina.",
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: "n_preset_2",
+        title: "Active Recall & Feynman Technique Blueprint",
+        content: "Step 1: Choose concept (e.g. Calculus optimization, Physics thermodynamics, Organic mechanisms).\nStep 2: Explain it simply as if teaching an intelligent 10-year-old with zero technical jargon.\nStep 3: Pinpoint the exact moments where explanation stumbles or uses hand-waving.\nStep 4: Return to source material, eliminate the blind spot, re-summarize.",
+        createdAt: new Date(Date.now() - 86400000).toISOString()
+      },
+      {
+        id: "n_preset_3",
+        title: "Stoic Shinobi Mindset (Itachi & Aurelius)",
+        content: "“You have power over your mind - not outside events.”\n• Accept pressure as a refining fire, not an obstacle.\n• Detach ego from practice test scores: low scores reveal where knowledge is incomplete, high scores prove the system works.\n• Keep composure and execute quietly.",
+        createdAt: new Date(Date.now() - 172800000).toISOString()
+      }
+    ];
+
+    function getStarterExams() {
+      const todayStr = formatDateKey(new Date());
+      const d1 = new Date(); d1.setDate(d1.getDate() - 7);
+      const d2 = new Date(); d2.setDate(d2.getDate() - 14);
+      return [
+        {
+          id: "ex_preset_1",
+          name: "Physics Advanced Mock 01",
+          category: "Coaching",
+          date: todayStr,
+          notes: "Coaching test on Mechanics, Rotational Dynamics & Optics. High speed accuracy.",
+          subjects: [
+            { name: "Mechanics & Rotational", obtained: 88, maxMarks: 100 },
+            { name: "Wave Optics", obtained: 42, maxMarks: 50 }
+          ],
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: "ex_preset_2",
+          name: "Term 1 School Midterms",
+          category: "School",
+          date: formatDateKey(d1),
+          notes: "Official school mid-term exams. Consistent across all board subjects.",
+          subjects: [
+            { name: "Mathematics", obtained: 95, maxMarks: 100 },
+            { name: "Physics", obtained: 91, maxMarks: 100 },
+            { name: "Chemistry", obtained: 86, maxMarks: 100 }
+          ],
+          createdAt: d1.toISOString()
+        },
+        {
+          id: "ex_preset_3",
+          name: "Coaching Weekly Chemistry Quiz",
+          category: "Coaching",
+          date: formatDateKey(d2),
+          notes: "Single subject targeted drill on Organic Reaction Mechanisms.",
+          subjects: [
+            { name: "Organic Chemistry", obtained: 46, maxMarks: 50 }
+          ],
+          createdAt: d2.toISOString()
+        }
+      ];
+    }
+
+    // --- Icons ---
     const IconCalendar = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>;
     const IconTracker = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" strokeWidth="1.75"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 12l2 2 4-4"/></svg>;
     const IconWorkout = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M6 8v8m12-8v8M3 10v4m18-4v4M6 12h12"/></svg>;
     const IconQuotes = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M7 8h3v4H7zm7 0h3v4h-3zM7 12a4 4 0 014 4H7v-4zm7 0a4 4 0 014 4h-4v-4z"/></svg>;
     const IconNotes = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 12h6m-6 4h4m5 5H6a2 2 0 01-2-2V5a2 2 0 012-2h8l6 6v12a2 2 0 01-2 2z"/></svg>;
     const IconExams = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5"/></svg>;
-    const IconSettings = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="1.75"/></svg>;
+    const IconSettings = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="1.75"/></svg>;
 
     // --- Circular Progress Gauge Component ---
-    function CircularProgress({ percentage, size = 80, strokeWidth = 7 }) {
+    function CircularProgress({ percentage, size = 76, strokeWidth = 6.5, label = "" }) {
       const radius = (size - strokeWidth) / 2;
       const circumference = radius * 2 * Math.PI;
       const validPct = isNaN(percentage) ? 0 : Math.min(100, Math.max(0, percentage));
@@ -217,7 +506,7 @@
       return (
         <div className="relative inline-flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
           <svg className="transform -rotate-90" width={size} height={size}>
-            <circle cx={size / 2} cy={size / 2} r={radius} stroke="#222222" strokeWidth={strokeWidth} fill="transparent" />
+            <circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255, 255, 255, 0.08)" strokeWidth={strokeWidth} fill="transparent" />
             <circle
               cx={size / 2}
               cy={size / 2}
@@ -228,12 +517,15 @@
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
               fill="transparent"
-              style={{ transition: "stroke-dashoffset 0.6s ease" }}
+              style={{ transition: "stroke-dashoffset 0.6s cubic-bezier(0.16, 1, 0.3, 1)" }}
             />
           </svg>
-          <span className="absolute text-xs font-semibold tracking-tight text-white">
-            {validPct.toFixed(1)}%
-          </span>
+          <div className="absolute flex flex-col items-center justify-center text-center">
+            <span className="text-xs font-semibold tracking-tight text-white font-mono tabular-nums">
+              {Math.round(validPct)}%
+            </span>
+            {label && <span className="text-[9px] text-gray-400 -mt-0.5">{label}</span>}
+          </div>
         </div>
       );
     }
@@ -242,12 +534,12 @@
     // MAIN APP COMPONENT
     // ==========================================
     function App() {
-      const [activeTab, setActiveTab] = useState("calendar");
+      const [activeTab, setActiveTab] = useState("tracker");
       const [today] = useState(new Date());
 
       // Global Stores State
-      const [trackerMap, setTrackerMap] = useState({});
-      const [habitConfig, setHabitConfig] = useState({ name: "Daily Focus & Discipline", target: "Unbroken Streak" });
+      const [habits, setHabits] = useState([]);
+      const [habitLogs, setHabitLogs] = useState({});
       const [workouts, setWorkouts] = useState([]);
       const [scheduledWorkouts, setScheduledWorkouts] = useState([]);
       const [journals, setJournals] = useState({});
@@ -263,115 +555,233 @@
       // Load initial data from IndexedDB
       useEffect(() => {
         (async () => {
-          const tRecords = await dbGetAll("tracker");
-          const tMap = {};
-          tRecords.forEach(r => { tMap[r.date] = r; });
-          setTrackerMap(tMap);
+          // 1. Habits
+          let hRecords = await dbGetAll("habits");
+          if (!hRecords || hRecords.length === 0) {
+            hRecords = STARTER_HABITS;
+            for (let h of hRecords) await dbPut("habits", h);
+          }
+          setHabits(hRecords);
 
-          const wRecords = await dbGetAll("workouts");
-          setWorkouts(wRecords.sort((a,b) => new Date(b.date) - new Date(a.date)));
+          // 2. Habit Daily Logs
+          const hlRecords = await dbGetAll("habitLogs");
+          const hlMap = {};
+          (hlRecords || []).forEach(hl => { if (hl && hl.date) hlMap[hl.date] = hl; });
 
-          const swRecords = await dbGetAll("scheduledWorkouts");
-          setScheduledWorkouts(swRecords);
+          // Backward compatibility check with legacy single-habit tracker table
+          const legacyTracker = await dbGetAll("tracker");
+          if (legacyTracker && legacyTracker.length > 0) {
+            legacyTracker.forEach(lt => {
+              if (lt.status === "YES" && !hlMap[lt.date]) {
+                hlMap[lt.date] = { date: lt.date, completed: ["h_deepwork"], reflection: lt.reflection || "" };
+              }
+            });
+          }
+          setHabitLogs(hlMap);
 
+          // 3. Workouts
+          let wRecords = await dbGetAll("workouts");
+          if (!wRecords || wRecords.length === 0) {
+            wRecords = getStarterWorkouts();
+            for (let w of wRecords) await dbPut("workouts", w);
+          }
+          setWorkouts((wRecords || []).sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+          // 4. Scheduled Workouts
+          let swRecords = await dbGetAll("scheduledWorkouts");
+          if (!swRecords || swRecords.length === 0) {
+            swRecords = getStarterScheduled();
+            for (let s of swRecords) await dbPut("scheduledWorkouts", s);
+          }
+          setScheduledWorkouts(swRecords || []);
+
+          // 5. Journals
           const jRecords = await dbGetAll("journals");
           const jMap = {};
-          jRecords.forEach(j => { jMap[j.date] = j.content; });
+          (jRecords || []).forEach(j => { if (j && j.date) jMap[j.date] = j.content; });
           setJournals(jMap);
 
-          const qRecords = await dbGetAll("quotes");
-          setQuotes(qRecords.sort((a,b) => (a.rank || 999) - (b.rank || 999)));
+          // 6. Quotes
+          let qRecords = await dbGetAll("quotes");
+          if (!qRecords || qRecords.length === 0) {
+            qRecords = STARTER_QUOTES;
+            for (let q of qRecords) await dbPut("quotes", q);
+          }
+          setQuotes((qRecords || []).sort((a,b) => (a.rank || 999) - (b.rank || 999)));
 
-          const nRecords = await dbGetAll("notes");
-          setNotes(nRecords.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
+          // 7. Notes
+          let nRecords = await dbGetAll("notes");
+          if (!nRecords || nRecords.length === 0) {
+            nRecords = STARTER_NOTES;
+            for (let n of nRecords) await dbPut("notes", n);
+          }
+          setNotes((nRecords || []).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
 
-          const eRecords = await dbGetAll("exams");
-          setExams(eRecords.sort((a,b) => new Date(b.date) - new Date(a.date)));
-
-          const habitMeta = await dbGetAll("meta");
-          const habit = habitMeta.find(m => m.key === "habit");
-          if (habit) setHabitConfig(habit.data);
-        })();
+          // 8. Exams
+          let eRecords = await dbGetAll("exams");
+          if (!eRecords || eRecords.length === 0) {
+            eRecords = getStarterExams();
+            for (let e of eRecords) await dbPut("exams", e);
+          }
+          setExams((eRecords || []).sort((a,b) => new Date(b.date) - new Date(a.date)));
+        })().catch(err => console.error("Database initialization error:", err));
       }, []);
 
-      // Accurate Streaks calculation
-      const { currentStreak, bestStreak } = useMemo(() => {
-        let cur = 0;
-        let best = 0;
-        const sortedDates = Object.keys(trackerMap).sort();
-        if (sortedDates.length === 0) return { currentStreak: 0, bestStreak: 0 };
+      // Habit streak calculation helper
+      const habitStreaks = useMemo(() => {
+        const streaks = {};
+        const todayKey = formatDateKey(today);
 
-        let running = 0;
-        let d = parseDateKey(sortedDates[0]);
-        const endD = new Date();
-        while (d <= endD) {
-          const key = formatDateKey(d);
-          if (trackerMap[key]?.status === "YES") {
-            running++;
-            if (running > best) best = running;
-          } else if (trackerMap[key]?.status === "NO") {
-            running = 0;
+        habits.forEach(h => {
+          let current = 0;
+          let best = 0;
+          let running = 0;
+
+          const sortedDates = Object.keys(habitLogs).sort();
+          if (sortedDates.length > 0) {
+            let d = parseDateKey(sortedDates[0]);
+            const endD = new Date(today);
+            while (d <= endD) {
+              const k = formatDateKey(d);
+              const isDone = habitLogs[k]?.completed?.includes(h.id);
+              if (isDone) {
+                running++;
+                if (running > best) best = running;
+              } else {
+                running = 0;
+              }
+              d.setDate(d.getDate() + 1);
+            }
           }
-          d.setDate(d.getDate() + 1);
-        }
 
-        let checkDate = new Date();
-        const todayKey = formatDateKey(checkDate);
-        if (!trackerMap[todayKey] || trackerMap[todayKey].status !== "YES") {
-          checkDate.setDate(checkDate.getDate() - 1);
-        }
-        while (true) {
-          const k = formatDateKey(checkDate);
-          if (trackerMap[k]?.status === "YES") {
-            cur++;
-            checkDate.setDate(checkDate.getDate() - 1);
-          } else {
-            break;
+          let checkD = new Date(today);
+          const isDoneToday = habitLogs[todayKey]?.completed?.includes(h.id);
+          if (!isDoneToday) {
+            checkD.setDate(checkD.getDate() - 1);
           }
-        }
-        return { currentStreak: cur, bestStreak: Math.max(best, cur) };
-      }, [trackerMap]);
+          while (true) {
+            const k = formatDateKey(checkD);
+            if (habitLogs[k]?.completed?.includes(h.id)) {
+              current++;
+              checkD.setDate(checkD.getDate() - 1);
+            } else {
+              break;
+            }
+          }
 
-      // --- Backup & Restore ---
+          streaks[h.id] = { current, best: Math.max(best, current) };
+        });
+
+        return streaks;
+      }, [habits, habitLogs, today]);
+
+      // Overall Daily Completion Rate
+      const todayKey = formatDateKey(today);
+      const todayLog = habitLogs[todayKey] || { date: todayKey, completed: [] };
+      const todayCompletedCount = todayLog.completed ? todayLog.completed.length : 0;
+      const todayPercentage = habits.length > 0 ? (todayCompletedCount / habits.length) * 100 : 0;
+
+      // Toggle a habit completion
+      const handleToggleHabit = async (habitId, dateStr = todayKey) => {
+        const existing = habitLogs[dateStr] || { date: dateStr, completed: [] };
+        const isCompleted = existing.completed.includes(habitId);
+        const updatedCompleted = isCompleted
+          ? existing.completed.filter(id => id !== habitId)
+          : [...existing.completed, habitId];
+
+        const updatedEntry = {
+          ...existing,
+          date: dateStr,
+          completed: updatedCompleted,
+          updatedAt: new Date().toISOString()
+        };
+
+        await dbPut("habitLogs", updatedEntry);
+        setHabitLogs(prev => ({ ...prev, [dateStr]: updatedEntry }));
+      };
+
+      // Set reflection note for a day
+      const handleSaveReflection = async (dateStr, text) => {
+        const existing = habitLogs[dateStr] || { date: dateStr, completed: [] };
+        const updatedEntry = { ...existing, reflection: text, updatedAt: new Date().toISOString() };
+        await dbPut("habitLogs", updatedEntry);
+        setHabitLogs(prev => ({ ...prev, [dateStr]: updatedEntry }));
+      };
+
+      // Reset to presets
+      const handleResetToPresets = async () => {
+        if (!confirm("Load recommended presets for habits, workouts, and ranked quotes? This will restore curated defaults.")) return;
+        
+        for (let h of STARTER_HABITS) await dbPut("habits", h);
+        setHabits(STARTER_HABITS);
+
+        for (let q of STARTER_QUOTES) await dbPut("quotes", q);
+        setQuotes(STARTER_QUOTES);
+
+        const sWorkouts = getStarterWorkouts();
+        for (let w of sWorkouts) await dbPut("workouts", w);
+        setWorkouts(prev => {
+          const ids = new Set(sWorkouts.map(s => s.id));
+          return [...sWorkouts, ...prev.filter(p => !ids.has(p.id))].sort((a,b) => new Date(b.date) - new Date(a.date));
+        });
+
+        const sSched = getStarterScheduled();
+        for (let s of sSched) await dbPut("scheduledWorkouts", s);
+        setScheduledWorkouts(prev => {
+          const ids = new Set(sSched.map(s => s.id));
+          return [...sSched, ...prev.filter(p => !ids.has(p.id))];
+        });
+
+        for (let n of STARTER_NOTES) await dbPut("notes", n);
+        setNotes(STARTER_NOTES);
+
+        const sExams = getStarterExams();
+        for (let e of sExams) await dbPut("exams", e);
+        setExams(sExams);
+
+        alert("Curated presets loaded successfully!");
+      };
+
+      // Backup & Restore
       const handleExport = () => {
         const payload = {
-          version: 1,
+          version: 2,
           exportedAt: new Date().toISOString(),
-          tracker: Object.values(trackerMap),
+          habits,
+          habitLogs: Object.values(habitLogs),
           workouts,
           scheduledWorkouts,
           journals: Object.entries(journals).map(([date, content]) => ({ date, content })),
           quotes,
           notes,
-          exams,
-          habitConfig
+          exams
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `arc_backup_${formatDateKey(new Date())}.json`;
+        a.download = `arc_backup_v2_${formatDateKey(new Date())}.json`;
         a.click();
         URL.revokeObjectURL(url);
       };
 
       const handleImport = (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files && e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
             const data = JSON.parse(event.target.result);
-            if (!data.tracker || !data.exams) throw new Error("Invalid backup format.");
+            if (!data) throw new Error("Invalid backup file.");
 
-            for (let t of data.tracker) await dbPut("tracker", t);
-            for (let w of (data.workouts || [])) await dbPut("workouts", w);
-            for (let s of (data.scheduledWorkouts || [])) await dbPut("scheduledWorkouts", s);
-            for (let j of (data.journals || [])) await dbPut("journals", j);
-            for (let q of (data.quotes || [])) await dbPut("quotes", q);
-            for (let n of (data.notes || [])) await dbPut("notes", n);
-            for (let ex of (data.exams || [])) await dbPut("exams", ex);
-            if (data.habitConfig) await dbPut("meta", { key: "habit", data: data.habitConfig });
+            if (data.habits) for (let h of data.habits) await dbPut("habits", h);
+            if (data.habitLogs) for (let hl of data.habitLogs) await dbPut("habitLogs", hl);
+            if (data.workouts) for (let w of data.workouts) await dbPut("workouts", w);
+            if (data.scheduledWorkouts) for (let s of data.scheduledWorkouts) await dbPut("scheduledWorkouts", s);
+            if (data.journals) for (let j of data.journals) await dbPut("journals", j);
+            if (data.quotes) for (let q of data.quotes) await dbPut("quotes", q);
+            if (data.notes) for (let n of data.notes) await dbPut("notes", n);
+            if (data.exams) for (let ex of data.exams) await dbPut("exams", ex);
 
             alert("Backup restored successfully.");
             window.location.reload();
@@ -383,56 +793,70 @@
       };
 
       return (
-        <div className="flex flex-col h-full max-w-md mx-auto bg-[#080808] border-x border-[#222222] overflow-hidden relative">
+        <div className="flex flex-col h-full max-w-md mx-auto bg-[#050505] border-x border-white/[0.08] overflow-hidden relative shadow-2xl">
           
-          {/* Top Status Header */}
-          <header className="px-5 pt-3 pb-2 flex items-center justify-between text-xs text-gray-400 select-none border-b border-[#222222]/60 shrink-0">
-            <span className="font-semibold text-white tracking-widest text-[13px]">ARC</span>
+          {/* Subtle Ambient Emerald Glow */}
+          <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[100px] z-0"></div>
+
+          {/* Top Glassmorphic App Bar */}
+          <header className="px-5 pt-3.5 pb-2.5 flex items-center justify-between text-xs text-gray-400 select-none border-b border-white/[0.08] bg-[#050505]/80 backdrop-blur-xl z-20 shrink-0">
+            <div className="flex items-center space-x-2.5">
+              <span className="font-bold text-white tracking-widest text-[14px]">ARC</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-gray-300 border border-white/[0.06]">
+                v2.1
+              </span>
+            </div>
             <div className="flex items-center space-x-3">
-              <span className="text-[11px] text-gray-400 tracking-wider">
+              <span className="text-[11px] text-gray-400 font-medium tracking-wide">
                 {today.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
               </span>
               <button 
                 onClick={() => setShowSettingsModal(true)} 
-                className="text-gray-400 hover:text-white transition p-1"
-                title="Backup & Settings"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] transition"
+                title="Settings & Data"
               >
                 <IconSettings />
               </button>
             </div>
           </header>
 
-          {/* Main Content Viewport */}
-          <main className="flex-1 overflow-y-auto scrollbar-none pb-20">
+          {/* Main Viewport Content */}
+          <main className="flex-1 overflow-y-auto scrollbar-none pb-20 relative z-10">
+            {activeTab === "tracker" && (
+              <TrackerSection
+                today={today}
+                habits={habits}
+                habitLogs={habitLogs}
+                habitStreaks={habitStreaks}
+                todayCompletedCount={todayCompletedCount}
+                todayPercentage={todayPercentage}
+                onToggleHabit={handleToggleHabit}
+                onSaveReflection={handleSaveReflection}
+                onAddHabit={async (h) => {
+                  await dbPut("habits", h);
+                  setHabits(prev => [...prev, h]);
+                }}
+                onUpdateHabit={async (h) => {
+                  await dbPut("habits", h);
+                  setHabits(prev => prev.map(p => p.id === h.id ? h : p));
+                }}
+                onDeleteHabit={async (id) => {
+                  await dbDelete("habits", id);
+                  setHabits(prev => prev.filter(p => p.id !== id));
+                }}
+              />
+            )}
+
             {activeTab === "calendar" && (
               <CalendarSection 
                 today={today}
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
-                trackerMap={trackerMap}
+                habits={habits}
+                habitLogs={habitLogs}
                 scheduledWorkouts={scheduledWorkouts}
                 journals={journals}
                 onOpenDayDetails={() => setShowDateModal(true)}
-              />
-            )}
-
-            {activeTab === "tracker" && (
-              <TrackerSection
-                today={today}
-                trackerMap={trackerMap}
-                currentStreak={currentStreak}
-                bestStreak={bestStreak}
-                habitConfig={habitConfig}
-                setHabitConfig={async (cfg) => {
-                  setHabitConfig(cfg);
-                  await dbPut("meta", { key: "habit", data: cfg });
-                }}
-                onCheckIn={async (status, reflection = "") => {
-                  const key = formatDateKey(today);
-                  const entry = { date: key, status, reflection, updatedAt: new Date().toISOString() };
-                  await dbPut("tracker", entry);
-                  setTrackerMap(prev => ({ ...prev, [key]: entry }));
-                }}
               />
             )}
 
@@ -534,13 +958,14 @@
               onClose={() => setShowSettingsModal(false)}
               onExport={handleExport}
               onImport={handleImport}
+              onResetPresets={handleResetToPresets}
             />
           )}
 
-          {/* Fixed Bottom Navigation */}
-          <nav className="absolute bottom-0 left-0 right-0 h-16 bg-[#080808]/95 backdrop-blur-md border-t border-[#222222] flex items-center justify-around px-2 z-30 shrink-0">
-            <NavButton label="Calendar" active={activeTab === "calendar"} icon={<IconCalendar />} onClick={() => setActiveTab("calendar")} />
+          {/* Floating Frosted Bottom Navigation */}
+          <nav className="absolute bottom-0 left-0 right-0 h-16 bg-[#0a0a0a]/85 backdrop-blur-2xl border-t border-white/[0.08] flex items-center justify-around px-2 z-30 shrink-0">
             <NavButton label="Tracker" active={activeTab === "tracker"} icon={<IconTracker />} onClick={() => setActiveTab("tracker")} />
+            <NavButton label="Calendar" active={activeTab === "calendar"} icon={<IconCalendar />} onClick={() => setActiveTab("calendar")} />
             <NavButton label="Workout" active={activeTab === "workout"} icon={<IconWorkout />} onClick={() => setActiveTab("workout")} />
             <NavButton label="Quotes" active={activeTab === "quotes"} icon={<IconQuotes />} onClick={() => setActiveTab("quotes")} />
             <NavButton label="Notes" active={activeTab === "notes"} icon={<IconNotes />} onClick={() => setActiveTab("notes")} />
@@ -556,13 +981,15 @@
       return (
         <button
           onClick={onClick}
-          className={`flex flex-col items-center justify-center flex-1 py-1 transition ${
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition relative ${
             active ? "text-appGreen" : "text-gray-500 hover:text-gray-300"
           }`}
         >
           <div className="relative">
             {icon}
-            {active && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-appGreen rounded-full"></span>}
+            {active && (
+              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-appGreen rounded-full shadow-[0_0_8px_#4ADE80]"></span>
+            )}
           </div>
           <span className="text-[10px] tracking-tight mt-1 font-medium">{label}</span>
         </button>
@@ -570,9 +997,359 @@
     }
 
     // ==========================================
-    // 1. CALENDAR COMPONENT
+    // 1. TRACKER 2.0 (MULTI-HABIT ENGINE)
     // ==========================================
-    function CalendarSection({ today, selectedDate, setSelectedDate, trackerMap, scheduledWorkouts, journals, onOpenDayDetails }) {
+    function TrackerSection({
+      today,
+      habits,
+      habitLogs,
+      habitStreaks,
+      todayCompletedCount,
+      todayPercentage,
+      onToggleHabit,
+      onSaveReflection,
+      onAddHabit,
+      onUpdateHabit,
+      onDeleteHabit
+    }) {
+      const todayKey = formatDateKey(today);
+      const [showAddModal, setShowAddModal] = useState(false);
+      const [editingHabit, setEditingHabit] = useState(null);
+      const [habitName, setHabitName] = useState("");
+      const [habitCategory, setHabitCategory] = useState("Focus & Body");
+      const [habitIcon, setHabitIcon] = useState("⚡");
+
+      const [showReflectionModal, setShowReflectionModal] = useState(false);
+      const [reflectionText, setReflectionText] = useState(habitLogs[todayKey]?.reflection || "");
+
+      // Last 7 days for consistency dots
+      const weekKeys = useMemo(() => getLastNDaysKeys(today, 7), [today]);
+
+      const openAdd = () => {
+        setEditingHabit(null);
+        setHabitName("");
+        setHabitCategory("Focus & Body");
+        setHabitIcon("⚡");
+        setShowAddModal(true);
+      };
+
+      const openEdit = (h) => {
+        setEditingHabit(h);
+        setHabitName(h.name);
+        setHabitCategory(h.category || "Focus & Body");
+        setHabitIcon(h.icon || "⚡");
+        setShowAddModal(true);
+      };
+
+      const handleSaveHabit = (e) => {
+        e.preventDefault();
+        if (!habitName.trim()) return;
+        const record = {
+          id: editingHabit ? editingHabit.id : ("h_" + Date.now()),
+          name: habitName.trim(),
+          category: habitCategory,
+          icon: habitIcon,
+          targetDays: 7,
+          updatedAt: new Date().toISOString()
+        };
+        if (editingHabit) onUpdateHabit(record);
+        else onAddHabit(record);
+        setShowAddModal(false);
+      };
+
+      const todayLog = habitLogs[todayKey] || { completed: [] };
+
+      return (
+        <div className="p-4 space-y-4">
+          
+          {/* Top Daily Progress Gauge Card */}
+          <div className="p-4 rounded-2xl glass-panel relative overflow-hidden flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                Daily Focus & Discipline
+              </span>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                {todayCompletedCount} of {habits.length} Habits
+              </h2>
+              <p className="text-xs text-gray-400">
+                {todayPercentage === 100 
+                  ? "Perfect discipline achieved today 🔥" 
+                  : todayPercentage >= 50 
+                    ? "Solid momentum. Finish strong." 
+                    : "Step into your daily protocol."}
+              </p>
+            </div>
+            
+            <CircularProgress percentage={todayPercentage} size={74} strokeWidth={6.5} />
+          </div>
+
+          {/* Action Header & Habits Title */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center space-x-2">
+              <h3 className="text-sm font-semibold text-white tracking-wide">Daily Habits</h3>
+              <span className="text-xs font-mono tabular-nums text-gray-400">({habits.length})</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  setReflectionText(habitLogs[todayKey]?.reflection || "");
+                  setShowReflectionModal(true);
+                }}
+                className="px-2.5 py-1 rounded-lg glass-tile text-xs text-gray-300 hover:text-white hover:border-gray-500 transition"
+              >
+                ✎ Reflection
+              </button>
+              <button
+                onClick={openAdd}
+                className="px-3 py-1 rounded-lg bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition flex items-center space-x-1"
+              >
+                <span>+ Habit</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Multi-Habit Checklist Rows */}
+          <div className="space-y-2.5">
+            {habits.length === 0 ? (
+              <div className="p-8 text-center glass-panel rounded-2xl space-y-2">
+                <p className="text-xs text-gray-400">No habits configured yet.</p>
+                <button onClick={openAdd} className="text-xs text-appGreen underline">Add your first habit</button>
+              </div>
+            ) : (
+              habits.map(habit => {
+                const isCompleted = todayLog.completed?.includes(habit.id);
+                const streak = habitStreaks[habit.id] || { current: 0, best: 0 };
+
+                return (
+                  <div
+                    key={habit.id}
+                    className={`p-3.5 rounded-2xl transition border flex flex-col space-y-2 ${
+                      isCompleted 
+                        ? "bg-emerald-950/20 border-emerald-500/30 shadow-[0_0_15px_rgba(74,222,128,0.06)]" 
+                        : "glass-panel hover:border-white/[0.14]"
+                    }`}
+                  >
+                    {/* Main Row */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0 pr-2">
+                        {/* Interactive Checkbox Button */}
+                        <button
+                          onClick={() => onToggleHabit(habit.id, todayKey)}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center transition shrink-0 ${
+                            isCompleted 
+                              ? "bg-appGreen text-black font-bold shadow-[0_0_12px_rgba(74,222,128,0.35)] scale-105" 
+                              : "glass-tile text-transparent hover:border-gray-500 hover:text-gray-600"
+                          }`}
+                          title={isCompleted ? "Mark incomplete" : "Mark complete"}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+
+                        {/* Title & Metadata */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm">{habit.icon || "⚡"}</span>
+                            <span className={`text-xs font-semibold truncate ${isCompleted ? "text-white line-through opacity-85" : "text-gray-100"}`}>
+                              {habit.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
+                            <span className="text-gray-400">{habit.category || "Routine"}</span>
+                            <span>·</span>
+                            <span className="text-appGreen font-mono tabular-nums font-medium">
+                              🔥 {streak.current} {streak.current === 1 ? "day" : "days"} streak
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Options Trigger */}
+                      <button 
+                        onClick={() => openEdit(habit)}
+                        className="text-gray-500 hover:text-gray-300 text-xs p-1"
+                        title="Edit Habit"
+                      >
+                        •••
+                      </button>
+                    </div>
+
+                    {/* 7-Day Consistency Dot Matrix */}
+                    <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04] text-[10px] text-gray-400">
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400">7-Day Consistency</span>
+                      <div className="flex items-center space-x-1.5">
+                        {weekKeys.map(k => {
+                          const dateObj = parseDateKey(k);
+                          const dayLetter = DAYS_SHORT[dateObj.getDay()][0];
+                          const doneOnDay = habitLogs[k]?.completed?.includes(habit.id);
+                          const isDayToday = k === todayKey;
+                          return (
+                            <button
+                              key={k}
+                              onClick={() => onToggleHabit(habit.id, k)}
+                              title={`${k}: ${doneOnDay ? "Done" : "Not Done"}`}
+                              className="flex flex-col items-center space-y-0.5"
+                            >
+                              <span className="text-[8px] text-gray-400">{dayLetter}</span>
+                              <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-mono ${
+                                doneOnDay 
+                                  ? "bg-appGreen text-black font-bold" 
+                                  : isDayToday 
+                                    ? "border border-dashed border-gray-500 bg-transparent" 
+                                    : "bg-white/[0.06]"
+                              }`} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Daily Reflection Preview Card */}
+          {habitLogs[todayKey]?.reflection && (
+            <div className="p-3.5 rounded-2xl glass-panel space-y-1">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Today's Reflection</span>
+              <p className="text-xs text-gray-300 italic">"{habitLogs[todayKey].reflection}"</p>
+            </div>
+          )}
+
+          {/* Add / Edit Habit Modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSaveHabit} className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <h3 className="text-sm font-semibold text-white">{editingHabit ? "Edit Habit" : "Create New Habit"}</h3>
+                  <button type="button" onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-gray-400">Habit Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={habitName}
+                    onChange={(e) => setHabitName(e.target.value)}
+                    placeholder="e.g. 100 Push-ups & Cold Shower"
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-400">Category</label>
+                    <select
+                      value={habitCategory}
+                      onChange={(e) => setHabitCategory(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                    >
+                      <option value="Focus & Body">Focus & Body</option>
+                      <option value="Physical">Physical</option>
+                      <option value="Mindset">Mindset</option>
+                      <option value="Health">Health</option>
+                      <option value="Recovery">Recovery</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-400">Emoji Icon</label>
+                    <select
+                      value={habitIcon}
+                      onChange={(e) => setHabitIcon(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                    >
+                      <option value="⚡">⚡ Focus</option>
+                      <option value="💪">💪 Strength</option>
+                      <option value="📚">📚 Study</option>
+                      <option value="💧">💧 Water</option>
+                      <option value="🌙">🌙 Sleep</option>
+                      <option value="🧘">🧘 Calm</option>
+                      <option value="🎯">🎯 Goal</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex space-x-2 pt-2">
+                  {editingHabit && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Delete habit "${editingHabit.name}"?`)) {
+                          onDeleteHabit(editingHabit.id);
+                          setShowAddModal(false);
+                        }
+                      }}
+                      className="py-2 px-3 text-xs rounded-xl border border-red-500/30 text-red-400 hover:bg-red-950/20"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 py-2 text-xs rounded-xl border border-white/[0.08] text-gray-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 text-xs rounded-xl bg-appGreen text-black font-semibold hover:bg-green-400 transition"
+                  >
+                    {editingHabit ? "Save Changes" : "Create Habit"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Daily Reflection Modal */}
+          {showReflectionModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <h3 className="text-sm font-semibold text-white">Evening Reflection</h3>
+                  <button onClick={() => setShowReflectionModal(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+                <p className="text-xs text-gray-400 italic">"Observe without judgment. A lapse is not a collapse."</p>
+                <textarea
+                  value={reflectionText}
+                  onChange={(e) => setReflectionText(e.target.value)}
+                  placeholder="What went well today? What will you sharpen tomorrow?"
+                  className="w-full h-24 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen resize-none"
+                />
+                <div className="flex space-x-2 pt-1">
+                  <button
+                    onClick={() => setShowReflectionModal(false)}
+                    className="flex-1 py-2 text-xs rounded-xl border border-white/[0.08] text-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSaveReflection(todayKey, reflectionText);
+                      setShowReflectionModal(false);
+                    }}
+                    className="flex-1 py-2 text-xs rounded-xl bg-appGreen text-black font-semibold hover:bg-green-400"
+                  >
+                    Save Note
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 2. CALENDAR 2.0 (CONSISTENCY HEATMAP)
+    // ==========================================
+    function CalendarSection({ today, selectedDate, setSelectedDate, habits, habitLogs, scheduledWorkouts, journals, onOpenDayDetails }) {
       const [viewMode, setViewMode] = useState("monthly");
       const [viewYear, setViewYear] = useState(today.getFullYear());
       const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -624,16 +1401,17 @@
 
       return (
         <div className="p-4 space-y-4">
+          
           {/* Header & View Mode Switcher */}
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">Calendar</h1>
-            <div className="flex items-center space-x-1 bg-[#121212] p-1 rounded-lg border border-[#222222] text-xs">
+            <h1 className="text-xl font-bold tracking-tight text-white">Calendar</h1>
+            <div className="flex items-center space-x-1 glass-tile p-1 rounded-xl text-xs">
               {["monthly", "weekly", "yearly"].map(mode => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 rounded-md capitalize font-medium transition ${
-                    viewMode === mode ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                  className={`px-3 py-1 rounded-lg capitalize font-medium transition ${
+                    viewMode === mode ? "bg-white/[0.1] text-appGreen shadow-sm" : "text-gray-400 hover:text-white"
                   }`}
                 >
                   {mode}
@@ -644,9 +1422,9 @@
 
           {/* Month / Year Navigator */}
           {viewMode !== "yearly" ? (
-            <div className="flex items-center justify-between text-sm py-1 border-b border-[#222222]/50">
-              <span className="font-medium text-white tracking-wide">
-                {MONTH_NAMES[viewMonth]} <span className="text-gray-400">{viewYear}</span>
+            <div className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.06]">
+              <span className="font-semibold text-white tracking-wide">
+                {MONTH_NAMES[viewMonth]} <span className="text-gray-400 font-normal">{viewYear}</span>
               </span>
               <div className="flex items-center space-x-2">
                 <button
@@ -656,7 +1434,7 @@
                       setViewYear(y => Math.max(2019, y - 1));
                     } else setViewMonth(m => m - 1);
                   }}
-                  className="p-1.5 rounded-md hover:bg-[#121212] text-gray-300"
+                  className="p-1.5 rounded-lg hover:bg-white/[0.06] text-gray-300"
                 >
                   ‹
                 </button>
@@ -666,7 +1444,7 @@
                     setViewYear(today.getFullYear());
                     setSelectedDate(new Date(today));
                   }}
-                  className="text-xs text-appGreen font-medium px-2 py-0.5 rounded border border-appGreen/30 hover:bg-appGreenSubtle"
+                  className="text-xs text-appGreen font-medium px-2 py-0.5 rounded-md border border-appGreen/30 hover:bg-appGreenSubtle"
                 >
                   Today
                 </button>
@@ -677,15 +1455,15 @@
                       setViewYear(y => Math.min(2030, y + 1));
                     } else setViewMonth(m => m + 1);
                   }}
-                  className="p-1.5 rounded-md hover:bg-[#121212] text-gray-300"
+                  className="p-1.5 rounded-lg hover:bg-white/[0.06] text-gray-300"
                 >
                   ›
                 </button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between text-sm py-1 border-b border-[#222222]/50">
-              <span className="font-medium text-white tracking-wide">Year {viewYear}</span>
+            <div className="flex items-center justify-between text-sm py-1.5 border-b border-white/[0.06]">
+              <span className="font-semibold text-white tracking-wide">Year {viewYear}</span>
               <div className="flex items-center space-x-2">
                 <button onClick={() => setViewYear(y => Math.max(2019, y - 1))} className="p-1.5 text-gray-300">‹</button>
                 <button onClick={() => setViewYear(y => Math.min(2030, y + 1))} className="p-1.5 text-gray-300">›</button>
@@ -704,7 +1482,8 @@
                   const dateKey = formatDateKey(item.date);
                   const isToday = dateKey === todayKey;
                   const isSelected = dateKey === selectedKey;
-                  const trackerEntry = trackerMap[dateKey];
+                  const log = habitLogs[dateKey];
+                  const hasDoneHabits = log?.completed && log.completed.length > 0;
                   const hasWorkout = scheduledWorkouts.some(w => w.date === dateKey);
                   const hasJournal = !!journals[dateKey];
 
@@ -716,19 +1495,19 @@
                         setViewMonth(item.date.getMonth());
                         setViewYear(item.date.getFullYear());
                       }}
-                      className={`h-11 rounded-lg flex flex-col items-center justify-center relative transition border ${
+                      className={`h-11 rounded-xl flex flex-col items-center justify-center relative transition border ${
                         isSelected 
-                          ? "bg-gray-800/80 border-gray-500 text-white" 
+                          ? "bg-white/[0.12] border-white/40 text-white shadow-lg" 
                           : isToday 
-                            ? "border-appGreen text-white bg-appGreenSubtle/20" 
-                            : "border-transparent text-gray-300 hover:bg-[#121212]"
+                            ? "border-appGreen text-white bg-appGreenSubtle" 
+                            : "border-transparent text-gray-300 hover:bg-white/[0.04]"
                       } ${!item.currentMonth ? "opacity-30" : ""}`}
                     >
-                      <span className="text-xs font-medium">{item.date.getDate()}</span>
-                      <div className="flex items-center space-x-0.5 mt-0.5 h-3">
-                        {trackerEntry?.status === "YES" && <span className="text-[10px] leading-none">🔥</span>}
+                      <span className="text-xs font-medium font-mono tabular-nums">{item.date.getDate()}</span>
+                      <div className="flex items-center space-x-1 mt-0.5 h-2">
+                        {hasDoneHabits && <span className="w-1.5 h-1.5 rounded-full bg-appGreen"></span>}
                         {hasWorkout && <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>}
-                        {hasJournal && <span className="w-1.5 h-1.5 rounded-full bg-appGreen"></span>}
+                        {hasJournal && <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>}
                       </div>
                     </button>
                   );
@@ -745,21 +1524,27 @@
                   const dKey = formatDateKey(d);
                   const isToday = dKey === todayKey;
                   const isSelected = dKey === selectedKey;
+                  const log = habitLogs[dKey];
+                  const doneCount = log?.completed ? log.completed.length : 0;
                   return (
                     <button
                       key={i}
                       onClick={() => setSelectedDate(d)}
-                      className={`p-2 rounded-lg flex flex-col items-center border ${
+                      className={`p-2.5 rounded-xl flex flex-col items-center border transition ${
                         isSelected 
-                          ? "bg-gray-800 border-gray-500" 
+                          ? "bg-white/[0.15] border-white/40 shadow-lg" 
                           : isToday 
-                            ? "border-appGreen" 
-                            : "border-[#222222] bg-[#121212]"
+                            ? "border-appGreen bg-appGreenSubtle" 
+                            : "glass-panel"
                       }`}
                     >
                       <span className="text-[10px] text-gray-400">{DAYS_SHORT[d.getDay()]}</span>
-                      <span className="text-sm font-semibold mt-1">{d.getDate()}</span>
-                      {trackerMap[dKey]?.status === "YES" && <span className="text-xs mt-0.5">🔥</span>}
+                      <span className="text-sm font-bold mt-1 font-mono tabular-nums">{d.getDate()}</span>
+                      {doneCount > 0 && (
+                        <span className="text-[10px] text-appGreen font-mono mt-0.5">
+                          {doneCount}✓
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -775,7 +1560,7 @@
                 let checksInMonth = 0;
                 for (let d = 1; d <= daysInM; d++) {
                   const k = formatDateKey(new Date(viewYear, mIdx, d));
-                  if (trackerMap[k]?.status === "YES") checksInMonth++;
+                  if (habitLogs[k]?.completed?.length > 0) checksInMonth++;
                 }
 
                 return (
@@ -785,30 +1570,30 @@
                       setViewMonth(mIdx);
                       setViewMode("monthly");
                     }}
-                    className="p-3 rounded-xl bg-[#121212] border border-[#222222] hover:border-gray-600 flex flex-col items-center justify-center text-center transition"
+                    className="p-3.5 rounded-2xl glass-panel hover:border-white/20 flex flex-col items-center justify-center text-center transition"
                   >
                     <span className="text-xs font-semibold text-white">{name.slice(0, 3)}</span>
-                    <span className="text-[11px] text-gray-400 mt-1">{checksInMonth} 🔥</span>
+                    <span className="text-[11px] text-appGreen font-mono mt-1 font-medium">{checksInMonth} days 🔥</span>
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Selected Date Summary & Day Details Card (Matches Screenshot 1 Screen 2) */}
-          <div className="p-4 rounded-xl bg-[#121212] border border-[#222222] space-y-3">
+          {/* Selected Date Summary & Day Details Card */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs font-medium text-white">
                   {selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                 </p>
-                <p className="text-xs text-gray-300 mt-0.5">
-                  {journals[selectedKey] ? "Journal recorded" : "No journal entry"}
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {habitLogs[selectedKey]?.completed?.length || 0} habits completed {journals[selectedKey] ? "· Journal recorded" : ""}
                 </p>
               </div>
               <button
                 onClick={onOpenDayDetails}
-                className="px-3.5 py-1.5 rounded-lg bg-appGreen text-black text-xs font-medium hover:bg-green-400 transition"
+                className="px-3.5 py-1.5 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition"
               >
                 + Journal & Schedule
               </button>
@@ -816,10 +1601,10 @@
 
             {/* Scheduled list for selected date */}
             {scheduledWorkouts.filter(w => w.date === selectedKey).length > 0 && (
-              <div className="space-y-1.5 pt-2 border-t border-[#222222]">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Scheduled Workouts</p>
+              <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Scheduled Workouts</p>
                 {scheduledWorkouts.filter(w => w.date === selectedKey).map(w => (
-                  <div key={w.id} className="p-2 rounded-lg bg-black/50 border border-[#222222] flex items-center justify-between text-xs">
+                  <div key={w.id} className="p-2 rounded-xl glass-tile flex items-center justify-between text-xs">
                     <div>
                       <span className="font-medium text-white">{w.title}</span>
                       <span className="text-gray-400 ml-2">{w.time || "Anytime"} {w.details ? `• ${w.details}` : ""}</span>
@@ -829,176 +1614,13 @@
               </div>
             )}
           </div>
+
         </div>
       );
     }
 
     // ==========================================
-    // 2. TRACKER COMPONENT
-    // ==========================================
-    function TrackerSection({ today, trackerMap, currentStreak, bestStreak, habitConfig, setHabitConfig, onCheckIn }) {
-      const todayKey = formatDateKey(today);
-      const currentEntry = trackerMap[todayKey];
-      const [showHabitEdit, setShowHabitEdit] = useState(false);
-      const [habitDraft, setHabitDraft] = useState(habitConfig.name);
-      const [reflectionInput, setReflectionInput] = useState("");
-      const [showNoModal, setShowNoModal] = useState(false);
-
-      const stoicReminders = [
-        "A lapse is not a collapse. Reflect calmly and resume tomorrow.",
-        "Discipline is about what you do next. Reset and move forward.",
-        "Observe without judgment. Tomorrow is an untouched page.",
-        "Consistency over time beats short bursts of perfection."
-      ];
-      const [quoteOfTheDay] = useState(() => stoicReminders[Math.floor(Math.random() * stoicReminders.length)]);
-
-      const handlePressYes = () => {
-        onCheckIn("YES", "");
-      };
-
-      const handlePressNo = () => {
-        setShowNoModal(true);
-      };
-
-      const confirmNo = () => {
-        onCheckIn("NO", reflectionInput);
-        setShowNoModal(false);
-        setReflectionInput("");
-      };
-
-      return (
-        <div className="p-5 flex flex-col items-center justify-between min-h-[480px]">
-          {/* Tracked Habit Header */}
-          <div className="w-full text-center">
-            <div className="flex items-center justify-center space-x-2">
-              <span className="text-xs uppercase tracking-widest text-gray-400 font-semibold">Daily Habit</span>
-              <button onClick={() => setShowHabitEdit(true)} className="text-gray-400 hover:text-white text-xs">✎</button>
-            </div>
-            <h2 className="text-lg font-medium text-white mt-1">{habitConfig.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Applies from tomorrow when updated</p>
-          </div>
-
-          {/* Minimal Central YES/NO Interaction */}
-          <div className="flex flex-col items-center my-6 space-y-4">
-            <button
-              onClick={handlePressYes}
-              className={`w-36 h-36 rounded-full flex flex-col items-center justify-center border-2 transition transform active:scale-95 shadow-xl ${
-                currentEntry?.status === "YES"
-                  ? "border-appGreen bg-appGreenSubtle text-appGreen ring-4 ring-appGreen/20"
-                  : "border-gray-700 bg-[#121212] text-white hover:border-gray-500"
-              }`}
-            >
-              <span className="text-2xl font-bold tracking-wider">YES</span>
-              {currentEntry?.status === "YES" && <span className="text-xs mt-1 text-appGreen">Completed</span>}
-            </button>
-
-            <button
-              onClick={handlePressNo}
-              className={`px-8 py-2 rounded-full text-xs font-semibold tracking-wider transition border ${
-                currentEntry?.status === "NO"
-                  ? "border-red-500 bg-red-950/30 text-red-400"
-                  : "border-[#222222] bg-[#121212] text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              NO
-            </button>
-
-            {currentEntry && (
-              <p className="text-xs text-gray-400 mt-1">
-                Checked in as <span className="text-white font-medium">{currentEntry.status}</span>. Tap to adjust anytime.
-              </p>
-            )}
-          </div>
-
-          {/* Streaks Readout */}
-          <div className="w-full grid grid-cols-2 gap-3 mt-auto">
-            <div className="p-3.5 rounded-xl bg-[#121212] border border-[#222222] flex flex-col items-center">
-              <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
-                Current Streak 🔥
-              </span>
-              <span className="text-2xl font-bold text-white mt-1">{currentStreak}</span>
-              <span className="text-[10px] text-gray-400">days active</span>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-[#121212] border border-[#222222] flex flex-col items-center">
-              <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
-                Best Streak 🔥
-              </span>
-              <span className="text-2xl font-bold text-white mt-1">{bestStreak}</span>
-              <span className="text-[10px] text-gray-400">personal best</span>
-            </div>
-          </div>
-
-          {/* Reflection Modal on NO */}
-          {showNoModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4">
-                <h3 className="text-sm font-semibold text-white">Daily Reflection</h3>
-                <p className="text-xs text-gray-400 italic">"{quoteOfTheDay}"</p>
-                <textarea
-                  value={reflectionInput}
-                  onChange={(e) => setReflectionInput(e.target.value)}
-                  placeholder="Optional: What hindered you today? (Keep it factual)"
-                  className="w-full h-24 p-2.5 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none resize-none"
-                />
-                <div className="flex space-x-2 pt-2">
-                  <button
-                    onClick={() => setShowNoModal(false)}
-                    className="flex-1 py-2 text-xs rounded-lg border border-[#222222] text-gray-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmNo}
-                    className="flex-1 py-2 text-xs rounded-lg bg-gray-200 text-black font-semibold"
-                  >
-                    Record NO
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Habit Configuration Modal */}
-          {showHabitEdit && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4">
-                <h3 className="text-sm font-semibold text-white">Configure Daily Habit</h3>
-                <div>
-                  <label className="text-[11px] text-gray-400">Habit Name</label>
-                  <input
-                    type="text"
-                    value={habitDraft}
-                    onChange={(e) => setHabitDraft(e.target.value)}
-                    className="w-full mt-1 p-2.5 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setShowHabitEdit(false)}
-                    className="flex-1 py-2 text-xs rounded-lg border border-[#222222] text-gray-400"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      setHabitConfig({ ...habitConfig, name: habitDraft });
-                      setShowHabitEdit(false);
-                    }}
-                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
-                  >
-                    Apply Next Day
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // ==========================================
-    // 3. WORKOUT SECTION
+    // 3. WORKOUTS 2.0 (HYPERTROPHY LOG)
     // ==========================================
     function WorkoutSection({ workouts, scheduledWorkouts, onAddWorkout, onDeleteWorkout, onAddScheduledWorkout, onDeleteScheduled }) {
       const [viewTab, setViewTab] = useState("log");
@@ -1013,19 +1635,19 @@
       // Workout Scheduling form states
       const [schedTitle, setSchedTitle] = useState("");
       const [schedDate, setSchedDate] = useState(formatDateKey(new Date()));
-      const [schedTime, setSchedTime] = useState("07:00");
+      const [schedTime, setSchedTime] = useState("07:30");
       const [schedDetails, setSchedDetails] = useState("");
 
       const handleAddOrUpdate = (e) => {
         e.preventDefault();
-        if (!exerciseName) return;
+        if (!exerciseName.trim()) return;
         const record = {
           id: editingWorkoutId || ("w_" + Date.now()),
-          exerciseName,
+          exerciseName: exerciseName.trim(),
           weight: Number(weight) || 0,
           sets: Number(sets) || 0,
           reps: Number(reps) || 0,
-          notes,
+          notes: notes.trim(),
           date: dateVal
         };
         onAddWorkout(record);
@@ -1051,13 +1673,13 @@
 
       const handleScheduleSubmit = (e) => {
         e.preventDefault();
-        if (!schedTitle) return;
+        if (!schedTitle.trim()) return;
         const item = {
           id: "sched_" + Date.now(),
-          title: schedTitle,
+          title: schedTitle.trim(),
           date: schedDate,
           time: schedTime,
-          details: schedDetails
+          details: schedDetails.trim()
         };
         onAddScheduledWorkout(item);
         setSchedTitle("");
@@ -1067,40 +1689,43 @@
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">Workout</h1>
-            <div className="flex bg-[#121212] p-1 rounded-lg border border-[#222222] text-xs">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Workouts</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Bodyweight & dumbbell hypertrophy training</p>
+            </div>
+            <div className="flex glass-tile p-1 rounded-xl text-xs">
               <button
                 onClick={() => setViewTab("log")}
-                className={`px-3 py-1 rounded-md font-medium transition ${
-                  viewTab === "log" ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  viewTab === "log" ? "bg-white/[0.1] text-appGreen" : "text-gray-400 hover:text-white"
                 }`}
               >
                 {editingWorkoutId ? "Edit" : "Log"}
               </button>
               <button
                 onClick={() => setViewTab("history")}
-                className={`px-3 py-1 rounded-md font-medium transition ${
-                  viewTab === "history" ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  viewTab === "history" ? "bg-white/[0.1] text-appGreen" : "text-gray-400 hover:text-white"
                 }`}
               >
-                History
+                History ({workouts.length})
               </button>
               <button
                 onClick={() => setViewTab("scheduled")}
-                className={`px-3 py-1 rounded-md font-medium transition ${
-                  viewTab === "scheduled" ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                className={`px-3 py-1 rounded-lg font-medium transition ${
+                  viewTab === "scheduled" ? "bg-white/[0.1] text-appGreen" : "text-gray-400 hover:text-white"
                 }`}
               >
-                Scheduled
+                Schedule ({scheduledWorkouts.length})
               </button>
             </div>
           </div>
 
           {viewTab === "log" && (
-            <form onSubmit={handleAddOrUpdate} className="space-y-3 bg-[#121212] p-4 rounded-xl border border-[#222222]">
+            <form onSubmit={handleAddOrUpdate} className="space-y-3 glass-panel p-4 rounded-2xl">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  {editingWorkoutId ? "Edit Workout Record" : "Record Completed Workout"}
+                <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                  {editingWorkoutId ? "Edit Workout Entry" : "Record Muscle Building Session"}
                 </p>
                 {editingWorkoutId && (
                   <button
@@ -1115,53 +1740,55 @@
                     }}
                     className="text-xs text-gray-400 hover:text-white"
                   >
-                    Cancel Edit
+                    Cancel
                   </button>
                 )}
               </div>
 
               <div>
-                <label className="text-[11px] text-gray-400">Exercise</label>
+                <label className="text-[11px] text-gray-400">Exercise Movement</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Incline Dumbbell Press"
+                  placeholder="e.g. Dumbbell Chest Press & Deficit Push-ups"
                   value={exerciseName}
                   onChange={(e) => setExerciseName(e.target.value)}
-                  className="w-full mt-1 p-2.5 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                  className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[11px] text-gray-400">Weight (kg)</label>
+                  <label className="text-[11px] text-gray-400">Load (kg)</label>
                   <input
                     type="number"
                     step="0.5"
-                    placeholder="32.5"
+                    placeholder="0 = Body"
                     value={weight}
                     onChange={(e) => setWeight(e.target.value)}
-                    className="w-full mt-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none font-mono"
                   />
                 </div>
                 <div>
                   <label className="text-[11px] text-gray-400">Sets</label>
                   <input
                     type="number"
+                    required
                     placeholder="4"
                     value={sets}
                     onChange={(e) => setSets(e.target.value)}
-                    className="w-full mt-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none font-mono"
                   />
                 </div>
                 <div>
                   <label className="text-[11px] text-gray-400">Reps</label>
                   <input
                     type="number"
+                    required
                     placeholder="10"
                     value={reps}
                     onChange={(e) => setReps(e.target.value)}
-                    className="w-full mt-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -1173,26 +1800,26 @@
                     type="date"
                     value={dateVal}
                     onChange={(e) => setDateVal(e.target.value)}
-                    className="w-full mt-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-gray-400">Notes (optional)</label>
+                  <label className="text-[11px] text-gray-400">Notes (RPE / Form)</label>
                   <input
                     type="text"
-                    placeholder="RPE 8.5, good form"
+                    placeholder="RPE 8.5, good squeeze"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full mt-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-lg bg-appGreen text-black font-semibold text-xs mt-2 hover:bg-green-400 transition"
+                className="w-full py-2.5 rounded-xl bg-appGreen text-black font-semibold text-xs mt-2 hover:bg-green-400 transition"
               >
-                {editingWorkoutId ? "Update Workout" : "Save Workout Entry"}
+                {editingWorkoutId ? "Update Workout Record" : "Save Workout Entry"}
               </button>
             </form>
           )}
@@ -1202,91 +1829,102 @@
               {workouts.length === 0 ? (
                 <p className="text-xs text-gray-500 italic text-center py-8">No workout logs recorded yet.</p>
               ) : (
-                workouts.map(w => (
-                  <div key={w.id} className="p-3.5 rounded-xl bg-[#121212] border border-[#222222] flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-white">{w.exerciseName}</span>
-                        <span className="text-[10px] text-appGreen font-mono px-1.5 py-0.5 rounded bg-appGreenSubtle">
-                          {w.weight ? `${w.weight} kg` : "Bodyweight"}
-                        </span>
+                workouts.map(w => {
+                  const totalVolume = (w.sets || 0) * (w.reps || 0) * (w.weight || 0);
+                  return (
+                    <div key={w.id} className="p-3.5 rounded-2xl glass-panel flex items-center justify-between hover:border-white/[0.14] transition">
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-semibold text-white truncate">{w.exerciseName}</span>
+                          <span className="text-[10px] text-appGreen font-mono px-1.5 py-0.5 rounded-full bg-appGreenSubtle shrink-0">
+                            {w.weight ? `${w.weight} kg` : "Bodyweight"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono tabular-nums">
+                          {w.sets} sets × {w.reps} reps {totalVolume > 0 ? `· ${totalVolume} kg vol` : ""}
+                        </p>
+                        {w.notes && <p className="text-[11px] text-gray-500 italic truncate mt-0.5">{w.notes}</p>}
+                        <span className="text-[10px] text-gray-600 block mt-1">{w.date}</span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {w.sets} sets × {w.reps} reps {w.notes ? `• ${w.notes}` : ""}
-                      </p>
-                      <span className="text-[10px] text-gray-500">{w.date}</span>
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        <button onClick={() => startEdit(w)} className="text-gray-400 hover:text-white text-xs px-2 py-1 rounded-lg hover:bg-white/[0.05]">
+                          Edit
+                        </button>
+                        <button onClick={() => onDeleteWorkout(w.id)} className="text-gray-500 hover:text-red-400 text-xs px-2 py-1">
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <button onClick={() => startEdit(w)} className="text-gray-400 hover:text-white text-xs px-2 py-1">
-                        Edit
-                      </button>
-                      <button onClick={() => onDeleteWorkout(w.id)} className="text-gray-500 hover:text-red-400 text-xs px-1">
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
 
           {viewTab === "scheduled" && (
             <div className="space-y-4">
-              {/* Add Scheduled Workout Form */}
-              <form onSubmit={handleScheduleSubmit} className="space-y-2.5 bg-[#121212] p-3.5 rounded-xl border border-[#222222]">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Schedule Future Session</p>
-                <input
-                  type="text"
-                  required
-                  placeholder="Session Title (e.g. Leg Day + Core)"
-                  value={schedTitle}
-                  onChange={(e) => setSchedTitle(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
-                />
-                <div className="grid grid-cols-2 gap-2">
+              <form onSubmit={handleScheduleSubmit} className="space-y-3 glass-panel p-4 rounded-2xl">
+                <p className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Schedule Upcoming Session</p>
+                <div>
+                  <label className="text-[11px] text-gray-400">Session Focus</label>
                   <input
-                    type="date"
-                    value={schedDate}
-                    onChange={(e) => setSchedDate(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
-                  />
-                  <input
-                    type="time"
-                    value={schedTime}
-                    onChange={(e) => setSchedTime(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    type="text"
+                    required
+                    placeholder="e.g. Chest Press & Pull-up Hypertrophy"
+                    value={schedTitle}
+                    onChange={(e) => setSchedTitle(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Details/Exercises (e.g. Squats, Romanian Deadlifts)"
-                  value={schedDetails}
-                  onChange={(e) => setSchedDetails(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-400">Date</label>
+                    <input
+                      type="date"
+                      value={schedDate}
+                      onChange={(e) => setSchedDate(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-400">Time</label>
+                    <input
+                      type="time"
+                      value={schedTime}
+                      onChange={(e) => setSchedTime(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Details</label>
+                  <input
+                    type="text"
+                    placeholder="4 sets of heavy DB press, deficit push-ups"
+                    value={schedDetails}
+                    onChange={(e) => setSchedDetails(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                  />
+                </div>
                 <button
                   type="submit"
-                  className="w-full py-2 rounded-lg bg-appGreen text-black font-semibold text-xs hover:bg-green-400 transition"
+                  className="w-full py-2.5 rounded-xl bg-appGreen text-black font-semibold text-xs mt-1 hover:bg-green-400 transition"
                 >
-                  Schedule Session
+                  Add Scheduled Workout
                 </button>
               </form>
 
               <div className="space-y-2">
-                <p className="text-xs text-gray-400">All Scheduled Sessions:</p>
                 {scheduledWorkouts.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic text-center py-4">No future workouts scheduled.</p>
+                  <p className="text-xs text-gray-500 italic text-center py-4">No scheduled workouts planned.</p>
                 ) : (
-                  scheduledWorkouts.map(s => (
-                    <div key={s.id} className="p-3 rounded-xl bg-[#121212] border border-[#222222] flex items-center justify-between">
+                  scheduledWorkouts.map(sw => (
+                    <div key={sw.id} className="p-3.5 rounded-2xl glass-panel flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-white">{s.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{s.date} {s.time ? `at ${s.time}` : ""} {s.details ? `• ${s.details}` : ""}</p>
+                        <span className="text-xs font-semibold text-white">{sw.title}</span>
+                        <p className="text-xs text-gray-400 mt-0.5">{sw.date} · {sw.time} {sw.details ? `• ${sw.details}` : ""}</p>
                       </div>
-                      <button
-                        onClick={() => onDeleteScheduled(s.id)}
-                        className="text-gray-500 hover:text-red-400 text-xs p-1"
-                      >
+                      <button onClick={() => onDeleteScheduled(sw.id)} className="text-gray-500 hover:text-red-400 text-xs px-2 py-1">
                         ✕
                       </button>
                     </div>
@@ -1295,12 +1933,13 @@
               </div>
             </div>
           )}
+
         </div>
       );
     }
 
     // ==========================================
-    // 4. QUOTE WALL
+    // 4. QUOTE WALL 2.0 (RANKED WISDOM)
     // ==========================================
     function QuoteWallSection({ quotes, onSaveQuote, onDeleteQuote }) {
       const [activeTab, setActiveTab] = useState("all");
@@ -1311,11 +1950,25 @@
       const [rank, setRank] = useState(0);
 
       const rankBadges = {
-        1: { name: "1st", color: "border-rankGold text-rankGold bg-rankGold/10" },
-        2: { name: "2nd", color: "border-rankSilver text-rankSilver bg-rankSilver/10" },
-        3: { name: "3rd", color: "border-rankBronze text-rankBronze bg-rankBronze/10" },
-        4: { name: "4th", color: "border-rankLapis text-rankLapis bg-rankLapis/10" },
-        5: { name: "5th", color: "border-rankRuby text-rankRuby bg-rankRuby/10" }
+        1: { name: "1st", tier: "Gold Tier", color: "border-rankGold/40 text-rankGold bg-rankGold/10" },
+        2: { name: "2nd", tier: "Silver Tier", color: "border-rankSilver/40 text-rankSilver bg-rankSilver/10" },
+        3: { name: "3rd", tier: "Bronze Tier", color: "border-rankBronze/40 text-rankBronze bg-rankBronze/10" },
+        4: { name: "4th", tier: "Lapis Tier", color: "border-rankLapis/40 text-rankLapis bg-rankLapis/10" },
+        5: { name: "5th", tier: "Ruby Tier", color: "border-rankRuby/40 text-rankRuby bg-rankRuby/10" },
+        6: { name: "6th", tier: "Titanium Tier", color: "border-gray-400/40 text-gray-300 bg-gray-800/40" },
+        7: { name: "7th", tier: "Azure Tier", color: "border-cyan-400/40 text-cyan-300 bg-cyan-950/20" },
+        8: { name: "8th", tier: "Amber Tier", color: "border-amber-500/40 text-amber-400 bg-amber-950/20" }
+      };
+
+      const rankCardStyles = {
+        1: "!border-[#FFD700]/70 shadow-[0_0_24px_rgba(255,215,0,0.18)] hover:!border-[#FFD700] hover:shadow-[0_0_30px_rgba(255,215,0,0.28)]",
+        2: "!border-[#C0C0C0]/70 shadow-[0_0_24px_rgba(192,192,192,0.18)] hover:!border-[#C0C0C0] hover:shadow-[0_0_30px_rgba(192,192,192,0.28)]",
+        3: "!border-[#CD7F32]/70 shadow-[0_0_24px_rgba(205,127,50,0.18)] hover:!border-[#CD7F32] hover:shadow-[0_0_30px_rgba(205,127,50,0.28)]",
+        4: "!border-[#3B82F6]/70 shadow-[0_0_24px_rgba(59,130,246,0.22)] hover:!border-[#3B82F6] hover:shadow-[0_0_30px_rgba(59,130,246,0.32)]",
+        5: "!border-[#E11D48]/70 shadow-[0_0_24px_rgba(225,29,72,0.22)] hover:!border-[#E11D48] hover:shadow-[0_0_30px_rgba(225,29,72,0.32)]",
+        6: "!border-[#9CA3AF]/60 shadow-[0_0_24px_rgba(156,163,175,0.16)] hover:!border-[#9CA3AF] hover:shadow-[0_0_30px_rgba(156,163,175,0.25)]",
+        7: "!border-[#22D3EE]/70 shadow-[0_0_24px_rgba(34,211,238,0.22)] hover:!border-[#22D3EE] hover:shadow-[0_0_30px_rgba(34,211,238,0.32)]",
+        8: "!border-[#F59E0B]/70 shadow-[0_0_24px_rgba(245,158,11,0.22)] hover:!border-[#F59E0B] hover:shadow-[0_0_30px_rgba(245,158,11,0.32)]"
       };
 
       const openAdd = () => {
@@ -1336,11 +1989,11 @@
 
       const handleSave = (e) => {
         e.preventDefault();
-        if (!quoteText) return;
+        if (!quoteText.trim()) return;
         const newQuote = {
           id: editingQuoteId || ("q_" + Date.now()),
-          text: quoteText,
-          author: author || "Unknown",
+          text: quoteText.trim(),
+          author: author.trim() || "Unknown",
           rank: Number(rank) || 0,
           updatedAt: new Date().toISOString()
         };
@@ -1348,36 +2001,39 @@
         setShowModal(false);
       };
 
-      const displayedQuotes = activeTab === "ranked"
-        ? quotes.filter(q => q.rank > 0 && q.rank <= 5).sort((a,b) => a.rank - b.rank)
-        : quotes;
+      const rankedQuotes = quotes.filter(q => q.rank > 0).sort((a,b) => a.rank - b.rank);
+      const displayedQuotes = activeTab === "ranked" ? rankedQuotes : quotes;
 
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">Quote Wall</h1>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Quote Wall</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Wisdom from Itachi, Naruto & world philosophy</p>
+            </div>
             <div className="flex items-center space-x-2">
-              <div className="flex bg-[#121212] p-1 rounded-lg border border-[#222222] text-xs">
+              <div className="flex glass-tile p-1 rounded-xl text-xs">
                 <button
                   onClick={() => setActiveTab("all")}
-                  className={`px-3 py-1 rounded-md font-medium transition ${
-                    activeTab === "all" ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                  className={`px-3 py-1 rounded-lg font-medium transition ${
+                    activeTab === "all" ? "bg-white/[0.1] text-appGreen" : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  All
+                  All ({quotes.length})
                 </button>
                 <button
                   onClick={() => setActiveTab("ranked")}
-                  className={`px-3 py-1 rounded-md font-medium transition ${
-                    activeTab === "ranked" ? "bg-[#222222] text-appGreen" : "text-gray-400"
+                  className={`px-3 py-1 rounded-lg font-medium transition ${
+                    activeTab === "ranked" ? "bg-white/[0.1] text-appGreen" : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  Top 5 Ranked
+                  Ranked ({rankedQuotes.length})
                 </button>
               </div>
               <button
                 onClick={openAdd}
-                className="w-7 h-7 rounded-lg bg-appGreen text-black font-bold flex items-center justify-center text-sm"
+                className="w-7 h-7 rounded-xl bg-appGreen text-black font-bold flex items-center justify-center text-sm hover:bg-green-400 transition"
+                title="Add Custom Quote"
               >
                 +
               </button>
@@ -1387,39 +2043,38 @@
           <div className="space-y-3">
             {displayedQuotes.length === 0 ? (
               <p className="text-xs text-gray-500 italic text-center py-8">
-                {activeTab === "ranked" ? "No ranked quotes assigned (1st-5th place)." : "No quotes saved yet."}
+                {activeTab === "ranked" ? "No ranked quotes assigned yet." : "No quotes saved yet."}
               </p>
             ) : (
               displayedQuotes.map(q => {
                 const badge = rankBadges[q.rank];
+                const cardRankClass = rankCardStyles[q.rank] || "hover:border-white/[0.14]";
                 return (
                   <div
                     key={q.id}
-                    className={`p-4 rounded-xl bg-[#121212] border transition relative ${
-                      badge ? `border-l-4 ${badge.color.split(" ")[0]}` : "border-[#222222]"
-                    }`}
+                    className={`p-4 rounded-2xl glass-panel transition-all duration-300 relative space-y-2.5 ${cardRankClass}`}
                   >
                     <div className="flex items-start justify-between">
-                      <p className="text-sm font-medium text-gray-200 leading-relaxed italic pr-4">
+                      <p className="text-sm font-medium text-gray-100 leading-relaxed italic pr-4">
                         "{q.text}"
                       </p>
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <button onClick={() => openEdit(q)} className="text-gray-400 hover:text-white text-xs">
+                      <div className="flex items-center space-x-1 shrink-0">
+                        <button onClick={() => openEdit(q)} className="text-gray-400 hover:text-white text-xs px-1.5 py-0.5">
                           Edit
                         </button>
-                        <button onClick={() => onDeleteQuote(q.id)} className="text-gray-500 hover:text-red-400 text-xs">
+                        <button onClick={() => onDeleteQuote(q.id)} className="text-gray-500 hover:text-red-400 text-xs px-1">
                           ✕
                         </button>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between mt-3 text-xs">
-                      <span className="text-gray-400 font-normal">— {q.author}</span>
+                    <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.04]">
+                      <span className="text-gray-400 font-medium">— {q.author}</span>
                       {badge ? (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${badge.color}`}>
-                          {badge.name} Rank
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${badge.color}`}>
+                          {badge.name} Rank · {badge.tier}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-gray-600">Unranked</span>
+                        <span className="text-[10px] text-gray-500">Unranked</span>
                       )}
                     </div>
                   </div>
@@ -1430,9 +2085,12 @@
 
           {/* Add / Edit Quote Modal */}
           {showModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <form onSubmit={handleSave} className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-3">
-                <h3 className="text-sm font-semibold text-white">{editingQuoteId ? "Edit Quote" : "Add Quote"}</h3>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSave} className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <h3 className="text-sm font-semibold text-white">{editingQuoteId ? "Edit Quote" : "Add Quote"}</h3>
+                  <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
                 <div>
                   <label className="text-[11px] text-gray-400">Quote Text</label>
                   <textarea
@@ -1440,7 +2098,7 @@
                     value={quoteText}
                     onChange={(e) => setQuoteText(e.target.value)}
                     placeholder="Write the exact quote..."
-                    className="w-full mt-1 p-2.5 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none resize-none h-20"
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none resize-none h-20"
                   />
                 </div>
                 <div>
@@ -1449,49 +2107,53 @@
                     type="text"
                     value={author}
                     onChange={(e) => setAuthor(e.target.value)}
-                    placeholder="e.g. Marcus Aurelius"
-                    className="w-full mt-1 p-2 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    placeholder="e.g. Itachi Uchiha"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-gray-400">Rank (Manual governance)</label>
+                  <label className="text-[11px] text-gray-400">Rank & Tier</label>
                   <select
                     value={rank}
                     onChange={(e) => setRank(Number(e.target.value))}
-                    className="w-full mt-1 p-2 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   >
                     <option value={0}>Unranked (Neutral)</option>
-                    <option value={1}>1st Place (Gold)</option>
-                    <option value={2}>2nd Place (Silver)</option>
-                    <option value={3}>3rd Place (Bronze)</option>
-                    <option value={4}>4th Place (Lapis Blue)</option>
-                    <option value={5}>5th Place (Ruby Red)</option>
+                    <option value={1}>1st Place (Gold · Itachi)</option>
+                    <option value={2}>2nd Place (Silver · Naruto)</option>
+                    <option value={3}>3rd Place (Bronze · Madara)</option>
+                    <option value={4}>4th Place (Lapis · Itachi)</option>
+                    <option value={5}>5th Place (Ruby · Kakashi)</option>
+                    <option value={6}>6th Place (Titanium · Seneca)</option>
+                    <option value={7}>7th Place (Azure · Aurelius)</option>
+                    <option value={8}>8th Place (Amber · Musashi)</option>
                   </select>
                 </div>
                 <div className="flex space-x-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 py-2 text-xs rounded-lg border border-[#222222] text-gray-400"
+                    className="flex-1 py-2 text-xs rounded-xl border border-white/[0.08] text-gray-400 hover:text-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                    className="flex-1 py-2 text-xs rounded-xl bg-appGreen text-black font-semibold hover:bg-green-400"
                   >
-                    Save
+                    Save Quote
                   </button>
                 </div>
               </form>
             </div>
           )}
+
         </div>
       );
     }
 
     // ==========================================
-    // 5. NOTES SECTION
+    // 5. NOTES 2.0 (STUDY SCRATCHPAD)
     // ==========================================
     function NotesSection({ notes, onSaveNote, onDeleteNote }) {
       const [search, setSearch] = useState("");
@@ -1499,11 +2161,6 @@
       const [editingNoteId, setEditingNoteId] = useState(null);
       const [title, setTitle] = useState("");
       const [content, setContent] = useState("");
-
-      const filteredNotes = notes.filter(n =>
-        n.title.toLowerCase().includes(search.toLowerCase()) ||
-        n.content.toLowerCase().includes(search.toLowerCase())
-      );
 
       const openAdd = () => {
         setEditingNoteId(null);
@@ -1521,26 +2178,31 @@
 
       const handleSave = (e) => {
         e.preventDefault();
-        if (!title && !content) return;
+        if (!content.trim()) return;
         const newNote = {
           id: editingNoteId || ("n_" + Date.now()),
-          title: title || "Untitled Note",
-          content,
+          title: title.trim() || "Untitled Note",
+          content: content.trim(),
           createdAt: new Date().toISOString()
         };
         onSaveNote(newNote);
         setShowModal(false);
       };
 
+      const filteredNotes = notes.filter(n =>
+        n.title.toLowerCase().includes(search.toLowerCase()) ||
+        n.content.toLowerCase().includes(search.toLowerCase())
+      );
+
       return (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">Notes</h1>
+            <h1 className="text-xl font-bold tracking-tight text-white">Study Notes</h1>
             <button
               onClick={openAdd}
-              className="px-3 py-1 text-xs rounded-lg bg-appGreen text-black font-semibold hover:bg-green-400 transition"
+              className="px-3 py-1 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition"
             >
-              + New Note
+              + Note
             </button>
           </div>
 
@@ -1549,505 +2211,614 @@
             placeholder="Search notes..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full p-2.5 rounded-xl bg-[#121212] border border-[#222222] text-xs text-white focus:outline-none"
+            className="w-full p-2.5 rounded-xl glass-panel text-xs text-white placeholder-gray-500 focus:outline-none focus:border-appGreen"
           />
 
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {filteredNotes.length === 0 ? (
               <p className="text-xs text-gray-500 italic text-center py-8">No notes found.</p>
             ) : (
-              filteredNotes.map(note => (
-                <div key={note.id} className="p-4 rounded-xl bg-[#121212] border border-[#222222] space-y-1 relative">
+              filteredNotes.map(n => (
+                <div key={n.id} className="p-4 rounded-2xl glass-panel hover:border-white/[0.14] transition space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-white">{note.title}</h3>
-                    <div className="flex items-center space-x-2">
-                      <button onClick={() => openEdit(note)} className="text-gray-400 hover:text-white text-xs">
+                    <h3 className="text-xs font-semibold text-white truncate pr-2">{n.title}</h3>
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      <button onClick={() => openEdit(n)} className="text-gray-400 hover:text-white text-xs px-1.5">
                         Edit
                       </button>
-                      <button onClick={() => onDeleteNote(note.id)} className="text-gray-500 hover:text-red-400 text-xs">
+                      <button onClick={() => onDeleteNote(n.id)} className="text-gray-500 hover:text-red-400 text-xs px-1">
                         ✕
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-300 whitespace-pre-wrap leading-relaxed">{note.content}</p>
-                  <p className="text-[10px] text-gray-500 pt-1">
-                    {new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
+                  <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{n.content}</p>
+                  <span className="text-[10px] text-gray-500 block pt-1 border-t border-white/[0.04]">
+                    {new Date(n.createdAt).toLocaleDateString()}
+                  </span>
                 </div>
               ))
             )}
           </div>
 
           {showModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <form onSubmit={handleSave} className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-3">
-                <h3 className="text-sm font-semibold text-white">{editingNoteId ? "Edit Note" : "Create Note"}</h3>
-                <input
-                  type="text"
-                  placeholder="Note Title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
-                />
-                <textarea
-                  placeholder="Note content..."
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full h-32 p-2.5 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none resize-none"
-                />
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleSave} className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <h3 className="text-sm font-semibold text-white">{editingNoteId ? "Edit Note" : "New Note"}</h3>
+                  <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Title</label>
+                  <input
+                    type="text"
+                    placeholder="Focus topic, equation, summary..."
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-gray-400">Content</label>
+                  <textarea
+                    required
+                    placeholder="Write your study notes..."
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none resize-none h-32"
+                  />
+                </div>
                 <div className="flex space-x-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 py-2 text-xs rounded-lg border border-[#222222] text-gray-400"
+                    className="flex-1 py-2 text-xs rounded-xl border border-white/[0.08] text-gray-400"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                    className="flex-1 py-2 text-xs rounded-xl bg-appGreen text-black font-semibold hover:bg-green-400"
                   >
-                    Save
+                    Save Note
                   </button>
                 </div>
               </form>
             </div>
           )}
+
         </div>
       );
     }
 
     // ==========================================
-    // 6. EXAM MARKS SECTION (Matches Screenshot 2)
+    // 6. EXAM MARKS DASHBOARD 2.1 (SCHOOL & COACHING)
     // ==========================================
     function ExamMarksSection({ exams, onAddExam, onDeleteExam }) {
-      const [category, setCategory] = useState("Coaching Exams");
-      const [showAddModal, setShowAddModal] = useState(false);
-      const [editingExam, setEditingExam] = useState(null);
-      const [selectedExamDetails, setSelectedExamDetails] = useState(null);
-      const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
+      const [filter, setFilter] = useState("all"); // "all" | "School" | "Coaching"
+      const [showModal, setShowModal] = useState(false);
 
-      const categoryExams = useMemo(() => {
-        return exams.filter(e => e.category === category);
-      }, [exams, category]);
-
-      const stats = useMemo(() => {
-        if (categoryExams.length === 0) {
-          return { overallPct: 0, highestPct: 0, totalExams: 0 };
-        }
-        let totalObt = 0;
-        let totalMax = 0;
-        let highest = 0;
-
-        categoryExams.forEach(ex => {
-          let exObt = 0;
-          let exMax = 0;
-          ex.subjects.forEach(s => {
-            exObt += Number(s.obtained) || 0;
-            exMax += Number(s.maxMarks) || 0;
+      const calcStats = (examList) => {
+        if (!examList || examList.length === 0) return { totalObt: 0, totalMax: 0, avgPct: 0, count: 0 };
+        let o = 0, m = 0;
+        examList.forEach(ex => {
+          (ex.subjects || []).forEach(sub => {
+            o += Number(sub.obtained) || 0;
+            m += Number(sub.maxMarks) || 0;
           });
-          const pct = exMax > 0 ? (exObt / exMax) * 100 : 0;
-          if (pct > highest) highest = pct;
-          totalObt += exObt;
-          totalMax += exMax;
         });
+        const pct = m > 0 ? (o / m) * 100 : 0;
+        return { totalObt: o, totalMax: m, avgPct: pct, count: examList.length };
+      };
 
-        const overallPct = totalMax > 0 ? (totalObt / totalMax) * 100 : 0;
-        return {
-          overallPct,
-          highestPct: highest,
-          totalExams: categoryExams.length
-        };
-      }, [categoryExams]);
+      const schoolExams = useMemo(() => exams.filter(e => (e.category || "School") === "School"), [exams]);
+      const coachingExams = useMemo(() => exams.filter(e => e.category === "Coaching"), [exams]);
+      
+      const displayedExams = useMemo(() => {
+        if (filter === "School") return schoolExams;
+        if (filter === "Coaching") return coachingExams;
+        return exams;
+      }, [filter, exams, schoolExams, coachingExams]);
+
+      const activeStats = useMemo(() => calcStats(displayedExams), [displayedExams]);
+      const overallStats = useMemo(() => calcStats(exams), [exams]);
+      const schoolStats = useMemo(() => calcStats(schoolExams), [schoolExams]);
+      const coachingStats = useMemo(() => calcStats(coachingExams), [coachingExams]);
+
+      const getHeaderTitle = () => {
+        if (filter === "School") return "School Academic Average";
+        if (filter === "Coaching") return "Coaching Academic Average";
+        return "Overall Academic Average";
+      };
 
       return (
         <div className="p-4 space-y-4">
-          {/* Header Title */}
+          {/* Header & Actions */}
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">Exam Marks</h1>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Exam Marks</h1>
+              <p className="text-xs text-gray-400 mt-0.5">School & coaching performance tracking</p>
+            </div>
             <button
-              onClick={() => {
-                setEditingExam(null);
-                setShowAddModal(true);
-              }}
-              className="px-3 py-1 rounded-lg bg-appGreen text-black font-semibold text-xs hover:bg-green-400 transition"
+              onClick={() => setShowModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition shadow-lg shadow-green-500/10 flex items-center space-x-1"
             >
-              + Add Result
+              <span>+ Add Test</span>
             </button>
           </div>
 
-          {/* Segmented Switcher (Matches Screenshot 2) */}
-          <div className="grid grid-cols-2 bg-[#121212] p-1 rounded-xl border border-[#222222] text-xs font-medium">
+          {/* School vs Coaching Filter Segmented Tabs */}
+          <div className="flex glass-tile p-1 rounded-xl text-xs">
             <button
-              onClick={() => setCategory("Coaching Exams")}
-              className={`py-2 rounded-lg transition ${
-                category === "Coaching Exams"
-                  ? "bg-[#222222] text-appGreen font-semibold"
-                  : "text-gray-400 hover:text-white"
+              onClick={() => setFilter("all")}
+              className={`flex-1 py-1.5 rounded-lg font-medium transition text-center ${
+                filter === "all" ? "bg-white/[0.1] text-appGreen shadow-sm" : "text-gray-400 hover:text-white"
               }`}
             >
-              Coaching Exams
+              All ({exams.length})
             </button>
             <button
-              onClick={() => setCategory("Tuition Exams")}
-              className={`py-2 rounded-lg transition ${
-                category === "Tuition Exams"
-                  ? "bg-[#222222] text-appGreen font-semibold"
-                  : "text-gray-400 hover:text-white"
+              onClick={() => setFilter("School")}
+              className={`flex-1 py-1.5 rounded-lg font-medium transition text-center ${
+                filter === "School" ? "bg-white/[0.1] text-blue-400 shadow-sm" : "text-gray-400 hover:text-white"
               }`}
             >
-              Tuition Exams
+              School ({schoolExams.length})
+            </button>
+            <button
+              onClick={() => setFilter("Coaching")}
+              className={`flex-1 py-1.5 rounded-lg font-medium transition text-center ${
+                filter === "Coaching" ? "bg-white/[0.1] text-emerald-400 shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Coaching ({coachingExams.length})
             </button>
           </div>
 
-          {/* Summary Metric Card */}
-          <div className="p-4 rounded-2xl bg-[#121212] border border-[#222222]">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3.5">
-                <CircularProgress percentage={stats.overallPct} size={76} strokeWidth={6} />
-                <div>
-                  <p className="text-xs text-gray-400">{category} Overall</p>
-                  <p className="text-2xl font-bold text-white tracking-tight">
-                    {stats.overallPct.toFixed(1)}%
-                  </p>
-                  <p className="text-[10px] text-gray-500">Avg. of all {category.toLowerCase()}</p>
-                </div>
-              </div>
+          {/* Academic Overview Radial Card */}
+          <div className="p-4 rounded-2xl glass-panel flex items-center justify-between">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">
+                {getHeaderTitle()}
+              </span>
+              <h2 className="text-2xl font-bold text-white font-mono tabular-nums leading-none">
+                {activeStats.avgPct.toFixed(1)}%
+              </h2>
+              <p className="text-xs text-gray-400 font-mono tabular-nums">
+                {activeStats.totalObt} / {activeStats.totalMax} total marks ({displayedExams.length} {displayedExams.length === 1 ? "entry" : "entries"})
+              </p>
 
-              <div className="space-y-3 pl-3 border-l border-[#222222]">
-                <div>
-                  <p className="text-[10px] text-gray-400">🏆 Highest</p>
-                  <p className="text-sm font-semibold text-white">{stats.highestPct.toFixed(1)}%</p>
+              {/* Sub-breakdown if viewing All */}
+              {filter === "all" && (schoolExams.length > 0 || coachingExams.length > 0) && (
+                <div className="flex items-center space-x-2 pt-1 text-[10px]">
+                  <span className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-300 font-mono">
+                    School: {schoolStats.avgPct.toFixed(1)}%
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono">
+                    Coaching: {coachingStats.avgPct.toFixed(1)}%
+                  </span>
                 </div>
-                <div>
-                  <p className="text-[10px] text-gray-400">📊 Total Exams</p>
-                  <p className="text-sm font-semibold text-white">{stats.totalExams}</p>
-                </div>
-              </div>
+              )}
             </div>
+            <CircularProgress percentage={activeStats.avgPct} size={76} strokeWidth={6.5} label="Avg" />
           </div>
 
-          {/* Recent Exams List */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-xs text-gray-400">
-              <span className="font-semibold uppercase tracking-wider text-[11px]">Recent {category}</span>
-              <span>{categoryExams.length} recorded</span>
-            </div>
-
-            {categoryExams.length === 0 ? (
-              <div className="p-8 text-center bg-[#121212] rounded-xl border border-[#222222]">
-                <p className="text-xs text-gray-500 italic">No exams recorded for {category}.</p>
-                <p className="text-[11px] text-gray-600 mt-1">Tap "+ Add Result" above to add real data.</p>
+          {/* Exam / Test Cards List */}
+          <div className="space-y-3">
+            {displayedExams.length === 0 ? (
+              <div className="text-center py-10 glass-panel rounded-2xl p-6">
+                <p className="text-xs text-gray-400">No {filter === "all" ? "" : filter.toLowerCase() + " "}exams recorded yet.</p>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="mt-3 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-xs text-gray-300 border border-white/[0.08] transition"
+                >
+                  Log your first {filter === "Coaching" ? "Coaching" : filter === "School" ? "School" : ""} test
+                </button>
               </div>
             ) : (
-              categoryExams.map(ex => {
-                let exObt = 0;
-                let exMax = 0;
-                ex.subjects.forEach(s => {
-                  exObt += Number(s.obtained) || 0;
-                  exMax += Number(s.maxMarks) || 0;
+              displayedExams.map(exam => {
+                let examObt = 0, examMax = 0;
+                (exam.subjects || []).forEach(s => {
+                  examObt += Number(s.obtained) || 0;
+                  examMax += Number(s.maxMarks) || 0;
                 });
-                const examPct = exMax > 0 ? (exObt / exMax) * 100 : 0;
+                const pct = examMax > 0 ? (examObt / examMax) * 100 : 0;
+                const isCoaching = exam.category === "Coaching";
+                const isSingleSubject = (exam.subjects || []).length === 1;
 
                 return (
-                  <div
-                    key={ex.id}
-                    onClick={() => setSelectedExamDetails(ex)}
-                    className="p-3.5 rounded-xl bg-[#121212] border border-[#222222] hover:border-gray-600 cursor-pointer transition flex items-center justify-between"
-                  >
-                    <div className="space-y-1 pr-3">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-white">{ex.name}</span>
+                  <div key={exam.id} className="p-4 rounded-2xl glass-panel hover:border-white/[0.14] transition space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                            isCoaching
+                              ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                              : "border-blue-500/30 text-blue-400 bg-blue-500/10"
+                          }`}>
+                            {isCoaching ? "Coaching" : "School"}
+                          </span>
+                          {isSingleSubject && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-purple-500/30 text-purple-300 bg-purple-500/10">
+                              Single Subject
+                            </span>
+                          )}
+                          <span className="text-[10px] text-gray-500 font-mono">{exam.date}</span>
+                        </div>
+                        <h3 className="text-sm font-semibold text-white tracking-tight">{exam.name}</h3>
                       </div>
-                      <p className="text-[10px] text-gray-400">{ex.date}</p>
-                      <p className="text-[11px] text-gray-300 font-mono tracking-tight line-clamp-1">
-                        {ex.subjects.map(s => `${s.name}: ${s.obtained}/${s.maxMarks}`).join(" | ")}
-                      </p>
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <span className="text-xs font-bold font-mono tabular-nums text-appGreen px-2 py-0.5 rounded-full bg-appGreenSubtle border border-appGreen/20">
+                          {pct.toFixed(1)}%
+                        </span>
+                        <button
+                          onClick={() => onDeleteExam(exam.id)}
+                          className="text-gray-500 hover:text-red-400 text-xs p-1"
+                          title="Delete Record"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <span className="text-sm font-semibold text-appGreen font-mono">
-                        {examPct.toFixed(1)}%
-                      </span>
-                      <span className="text-gray-500 text-xs">›</span>
+                    {/* Subjects breakdown */}
+                    <div className="space-y-1.5 pt-2 border-t border-white/[0.04]">
+                      {(exam.subjects || []).map((sub, i) => {
+                        const subPct = sub.maxMarks > 0 ? (sub.obtained / sub.maxMarks) * 100 : 0;
+                        return (
+                          <div key={i} className="flex items-center justify-between text-xs py-0.5">
+                            <span className="text-gray-300 font-medium">{sub.name}</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono text-gray-400 tabular-nums">
+                                {sub.obtained} / {sub.maxMarks}
+                              </span>
+                              <span className="text-[11px] font-mono tabular-nums text-gray-400 w-11 text-right">
+                                {subPct.toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {exam.notes && (
+                      <p className="text-[11px] text-gray-400 italic pt-1.5 border-t border-white/[0.04]">
+                        {exam.notes}
+                      </p>
+                    )}
                   </div>
                 );
               })
             )}
           </div>
 
-          {/* View Detailed Analysis Button (Matches Screenshot 2) */}
-          {categoryExams.length > 0 && (
-            <button
-              onClick={() => setShowDetailedAnalysis(true)}
-              className="w-full py-3 rounded-xl border border-appGreen/40 bg-appGreenSubtle/20 text-appGreen text-xs font-semibold hover:bg-appGreenSubtle transition flex items-center justify-center space-x-2"
-            >
-              <span>📊 View Detailed Analysis</span>
-              <span>›</span>
-            </button>
-          )}
-
-          {/* Add / Edit Exam Modal */}
-          {showAddModal && (
+          {showModal && (
             <AddExamModal
-              category={category}
-              existingExam={editingExam}
-              onClose={() => {
-                setShowAddModal(false);
-                setEditingExam(null);
-              }}
-              onSave={(newExam) => {
-                onAddExam(newExam);
-                setShowAddModal(false);
-                setEditingExam(null);
+              defaultCategory={filter === "School" ? "School" : "Coaching"}
+              onClose={() => setShowModal(false)}
+              onSave={(record) => {
+                onAddExam(record);
+                setShowModal(false);
               }}
             />
           )}
 
-          {/* Exam Details Modal */}
-          {selectedExamDetails && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-[#222222] pb-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">{selectedExamDetails.name}</h3>
-                    <p className="text-[11px] text-gray-400">{selectedExamDetails.category} • {selectedExamDetails.date}</p>
-                  </div>
-                  <button onClick={() => setSelectedExamDetails(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Subject Breakdown</p>
-                  {selectedExamDetails.subjects.map((sub, idx) => {
-                    const subPct = sub.maxMarks > 0 ? ((sub.obtained / sub.maxMarks) * 100).toFixed(1) : 0;
-                    return (
-                      <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-black border border-[#222222]">
-                        <span className="font-medium text-gray-200">{sub.name}</span>
-                        <span className="font-mono text-gray-300">
-                          {sub.obtained} / {sub.maxMarks} <span className="text-appGreen ml-1">({subPct}%)</span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {selectedExamDetails.notes && (
-                  <div>
-                    <p className="text-[11px] text-gray-400">Notes:</p>
-                    <p className="text-xs text-gray-300 italic">{selectedExamDetails.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex space-x-2 pt-2">
-                  <button
-                    onClick={() => {
-                      setEditingExam(selectedExamDetails);
-                      setSelectedExamDetails(null);
-                      setShowAddModal(true);
-                    }}
-                    className="flex-1 py-2 text-xs rounded-lg bg-[#222222] text-white font-medium"
-                  >
-                    Edit Exam
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm("Delete this examination record?")) {
-                        onDeleteExam(selectedExamDetails.id);
-                        setSelectedExamDetails(null);
-                      }
-                    }}
-                    className="flex-1 py-2 text-xs rounded-lg border border-red-500/40 text-red-400 hover:bg-red-950/20"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Detailed Analysis Modal */}
-          {showDetailedAnalysis && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto">
-                <div className="flex items-center justify-between border-b border-[#222222] pb-2">
-                  <h3 className="text-sm font-semibold text-white">Analysis: {category}</h3>
-                  <button onClick={() => setShowDetailedAnalysis(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
-                </div>
-                
-                <div className="space-y-3">
-                  {categoryExams.map(ex => {
-                    let exObt = 0;
-                    let exMax = 0;
-                    ex.subjects.forEach(s => {
-                      exObt += Number(s.obtained) || 0;
-                      exMax += Number(s.maxMarks) || 0;
-                    });
-                    const pct = exMax > 0 ? (exObt / exMax) * 100 : 0;
-                    return (
-                      <div key={ex.id} className="p-3 rounded-xl bg-black border border-[#222222] space-y-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="font-semibold text-white">{ex.name}</span>
-                          <span className="font-mono text-appGreen font-bold">{pct.toFixed(1)}%</span>
-                        </div>
-                        <div className="w-full bg-[#222222] h-2 rounded-full overflow-hidden">
-                          <div className="bg-appGreen h-full rounded-full transition-all" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={() => setShowDetailedAnalysis(false)}
-                  className="w-full py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       );
     }
 
-    // --- Add/Edit Exam Modal Helper ---
-    function AddExamModal({ category, existingExam, onClose, onSave }) {
-      const [name, setName] = useState(existingExam ? existingExam.name : "");
-      const [date, setDate] = useState(existingExam ? existingExam.date : formatDateKey(new Date()));
-      const [notes, setNotes] = useState(existingExam ? existingExam.notes : "");
-      const [subjects, setSubjects] = useState(
-        existingExam ? existingExam.subjects : [
-          { name: "Physics", obtained: "", maxMarks: "100" },
-          { name: "Maths", obtained: "", maxMarks: "100" }
-        ]
-      );
+    function AddExamModal({ onClose, onSave, defaultCategory = "Coaching" }) {
+      const [mode, setMode] = useState("single"); // "single" | "multi"
+      const [category, setCategory] = useState(defaultCategory); // "School" | "Coaching"
+      const [date, setDate] = useState(formatDateKey(new Date()));
+      const [notes, setNotes] = useState("");
 
-      const updateSubject = (index, field, value) => {
-        setSubjects(prev => {
-          const copy = [...prev];
-          copy[index][field] = value;
-          return copy;
-        });
+      // Single-subject mode fields
+      const [singleSubject, setSingleSubject] = useState("");
+      const [singleTitle, setSingleTitle] = useState("");
+      const [singleObtained, setSingleObtained] = useState("");
+      const [singleMaxMarks, setSingleMaxMarks] = useState("100");
+
+      // Multi-subject mode fields
+      const [multiName, setMultiName] = useState("");
+      const [multiSubjects, setMultiSubjects] = useState([
+        { name: "Mathematics", obtained: "", maxMarks: "100" },
+        { name: "Physics", obtained: "", maxMarks: "100" }
+      ]);
+
+      const commonSubjects = ["Physics", "Chemistry", "Mathematics", "Biology", "English", "Computer Sci"];
+
+      const addMultiSubjectRow = () => {
+        setMultiSubjects([...multiSubjects, { name: "", obtained: "", maxMarks: "100" }]);
       };
 
-      const addSubjectRow = () => {
-        setSubjects(prev => [...prev, { name: "", obtained: "", maxMarks: "100" }]);
+      const updateMultiSubject = (idx, field, val) => {
+        const copy = [...multiSubjects];
+        copy[idx][field] = val;
+        setMultiSubjects(copy);
       };
 
-      const removeSubjectRow = (index) => {
-        if (subjects.length === 1) return;
-        setSubjects(prev => prev.filter((_, i) => i !== index));
+      const removeMultiSubjectRow = (idx) => {
+        if (multiSubjects.length <= 1) return;
+        setMultiSubjects(multiSubjects.filter((_, i) => i !== idx));
       };
 
       const handleSubmit = (e) => {
         e.preventDefault();
-        if (!name) return;
-        const examRecord = {
-          id: existingExam ? existingExam.id : ("ex_" + Date.now()),
-          category,
-          name,
-          date,
-          notes,
-          subjects: subjects.map(s => ({
-            name: s.name || "Subject",
+
+        if (mode === "single") {
+          const sName = singleSubject.trim();
+          if (!sName) return;
+          const finalTitle = singleTitle.trim() || `${sName} ${category === "Coaching" ? "Test" : "Exam"}`;
+          const examRecord = {
+            id: "ex_" + Date.now(),
+            name: finalTitle,
+            category,
+            date,
+            notes: notes.trim(),
+            subjects: [
+              {
+                name: sName,
+                obtained: Number(singleObtained) || 0,
+                maxMarks: Number(singleMaxMarks) || 100
+              }
+            ],
+            createdAt: new Date().toISOString()
+          };
+          onSave(examRecord);
+        } else {
+          const mTitle = multiName.trim();
+          if (!mTitle) return;
+          const validSubjects = multiSubjects.filter(s => s.name.trim()).map(s => ({
+            name: s.name.trim(),
             obtained: Number(s.obtained) || 0,
             maxMarks: Number(s.maxMarks) || 100
-          }))
-        };
-        onSave(examRecord);
+          }));
+          if (validSubjects.length === 0) return;
+
+          const examRecord = {
+            id: "ex_" + Date.now(),
+            name: mTitle,
+            category,
+            date,
+            notes: notes.trim(),
+            subjects: validSubjects,
+            createdAt: new Date().toISOString()
+          };
+          onSave(examRecord);
+        }
       };
 
       return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleSubmit} className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-3 max-h-[85vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-white">{existingExam ? "Edit" : "Record"} {category}</h3>
-
-            <div>
-              <label className="text-[11px] text-gray-400">Exam Title</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. JEE Mock Test 1"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full mt-1 p-2 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
-              />
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-2.5">
+              <h3 className="text-sm font-semibold text-white">Log Academic Test / Exam</h3>
+              <button type="button" onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
             </div>
 
+            {/* Mode Switcher: Single-Subject vs Multi-Subject */}
             <div>
-              <label className="text-[11px] text-gray-400">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full mt-1 p-2 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
-              />
-            </div>
-
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] text-gray-400 font-semibold">Subjects & Marks</label>
-                <button type="button" onClick={addSubjectRow} className="text-xs text-appGreen font-medium">
-                  + Add Subject
+              <label className="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Entry Mode</label>
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/[0.06] text-xs">
+                <button
+                  type="button"
+                  onClick={() => setMode("single")}
+                  className={`py-1.5 rounded-lg font-medium transition text-center ${
+                    mode === "single" ? "bg-white/[0.12] text-appGreen font-semibold shadow-sm" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  ⚡ One per Subject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("multi")}
+                  className={`py-1.5 rounded-lg font-medium transition text-center ${
+                    mode === "multi" ? "bg-white/[0.12] text-appGreen font-semibold shadow-sm" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  📚 Multi-Subject
                 </button>
               </div>
+            </div>
 
-              {subjects.map((sub, idx) => (
-                <div key={idx} className="flex items-center space-x-1.5">
+            {/* Category Selector: School vs Coaching */}
+            <div>
+              <label className="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Section / Category</label>
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-black/60 border border-white/[0.06] text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCategory("School")}
+                  className={`py-1.5 rounded-lg font-medium transition text-center ${
+                    category === "School" ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  🏫 School
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategory("Coaching")}
+                  className={`py-1.5 rounded-lg font-medium transition text-center ${
+                    category === "Coaching" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  🎯 Coaching
+                </button>
+              </div>
+            </div>
+
+            {/* Single Subject Mode Fields */}
+            {mode === "single" && (
+              <div className="space-y-3 pt-1 border-t border-white/[0.06]">
+                <div>
+                  <label className="text-[11px] text-gray-400">Subject Name</label>
                   <input
                     type="text"
-                    placeholder="Subject"
-                    value={sub.name}
-                    onChange={(e) => updateSubject(idx, "name", e.target.value)}
-                    className="flex-1 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    required
+                    placeholder="e.g. Physics, Mathematics, Organic Chemistry"
+                    value={singleSubject}
+                    onChange={(e) => setSingleSubject(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen"
                   />
-                  <input
-                    type="number"
-                    placeholder="Obt"
-                    value={sub.obtained}
-                    onChange={(e) => updateSubject(idx, "obtained", e.target.value)}
-                    className="w-16 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none text-center"
-                  />
-                  <span className="text-gray-500 text-xs">/</span>
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={sub.maxMarks}
-                    onChange={(e) => updateSubject(idx, "maxMarks", e.target.value)}
-                    className="w-16 p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none text-center"
-                  />
-                  <button type="button" onClick={() => removeSubjectRow(idx)} className="text-gray-500 hover:text-red-400 text-xs p-1">
-                    ✕
-                  </button>
+                  {/* Quick preset chips */}
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {commonSubjects.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSingleSubject(s)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition ${
+                          singleSubject === s
+                            ? "bg-appGreenSubtle text-appGreen border-appGreen/30"
+                            : "bg-white/[0.03] text-gray-400 border-white/[0.06] hover:text-white"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
+
+                <div>
+                  <label className="text-[11px] text-gray-400">Test Title (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder={singleSubject ? `${singleSubject} Weekly Test` : "e.g. Chapter 4 Quiz, Mock Test #2"}
+                    value={singleTitle}
+                    onChange={(e) => setSingleTitle(e.target.value)}
+                    className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-400">Marks Obtained</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 45"
+                      value={singleObtained}
+                      onChange={(e) => setSingleObtained(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-appGreen"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-400">Max Marks</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 50 or 100"
+                      value={singleMaxMarks}
+                      onChange={(e) => setSingleMaxMarks(e.target.value)}
+                      className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Multi Subject Mode Fields */}
+            {mode === "multi" && (
+              <div className="space-y-3 pt-1 border-t border-white/[0.06]">
+                <div>
+                  <label className="text-[11px] text-gray-400">Exam Title</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Term 1 Board Midterms, Grand Mock Test"
+                    value={multiName}
+                    onChange={(e) => setMultiName(e.target.value)}
+                    className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-gray-400 font-semibold">Subjects & Scores</label>
+                    <button type="button" onClick={addMultiSubjectRow} className="text-xs text-appGreen font-medium hover:underline">
+                      + Add Subject
+                    </button>
+                  </div>
+
+                  {multiSubjects.map((sub, idx) => (
+                    <div key={idx} className="flex items-center space-x-1.5">
+                      <input
+                        type="text"
+                        placeholder="Subject"
+                        value={sub.name}
+                        onChange={(e) => updateMultiSubject(idx, "name", e.target.value)}
+                        className="flex-1 p-2 rounded-lg bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Obt"
+                        value={sub.obtained}
+                        onChange={(e) => updateMultiSubject(idx, "obtained", e.target.value)}
+                        className="w-16 p-2 rounded-lg bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none text-center font-mono"
+                      />
+                      <span className="text-gray-500 text-xs">/</span>
+                      <input
+                        type="number"
+                        placeholder="Max"
+                        value={sub.maxMarks}
+                        onChange={(e) => updateMultiSubject(idx, "maxMarks", e.target.value)}
+                        className="w-16 p-2 rounded-lg bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none text-center font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeMultiSubjectRow(idx)}
+                        className="text-gray-500 hover:text-red-400 text-xs p-1"
+                        title="Remove Subject"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Shared Fields: Date & Notes */}
+            <div className="space-y-2.5 pt-2 border-t border-white/[0.06]">
+              <div>
+                <label className="text-[11px] text-gray-400">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-gray-400">Reflection / Notes (optional)</label>
+                <input
+                  type="text"
+                  placeholder="Key mistakes, formulas to revise, test duration..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full mt-1 p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="text-[11px] text-gray-400">Notes (optional)</label>
-              <input
-                type="text"
-                placeholder="Time management, silly mistakes..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full mt-1 p-2 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none"
-              />
-            </div>
-
-            <div className="flex space-x-2 pt-2">
+            {/* Modal Actions */}
+            <div className="flex space-x-2 pt-2 border-t border-white/[0.06]">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 text-xs rounded-lg border border-[#222222] text-gray-400"
+                className="flex-1 py-2 text-xs rounded-xl border border-white/[0.08] text-gray-400 hover:text-white transition"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-2 text-xs rounded-lg bg-appGreen text-black font-semibold"
+                className="flex-1 py-2 text-xs rounded-xl bg-appGreen text-black font-semibold hover:bg-green-400 transition"
               >
-                Save
+                Save Record
               </button>
             </div>
           </form>
@@ -2056,115 +2827,98 @@
     }
 
     // ==========================================
-    // 7. DATE JOURNAL & WORKOUT MODAL
+    // 7. DATE JOURNAL & SCHEDULE MODAL
     // ==========================================
     function DateJournalModal({ date, journalContent, scheduledForDate, onSaveJournal, onAddScheduled, onDeleteScheduled, onClose }) {
-      const dateKey = formatDateKey(date);
       const [draftContent, setDraftContent] = useState(journalContent);
-      const [autoSaved, setAutoSaved] = useState(false);
-
       const [title, setTitle] = useState("");
-      const [time, setTime] = useState("07:00");
+      const [time, setTime] = useState("07:30");
       const [details, setDetails] = useState("");
 
-      useEffect(() => {
-        setDraftContent(journalContent || "");
-      }, [journalContent, dateKey]);
-
-      useEffect(() => {
-        const timer = setTimeout(() => {
-          if (draftContent !== journalContent) {
-            onSaveJournal(draftContent);
-            setAutoSaved(true);
-            setTimeout(() => setAutoSaved(false), 1200);
-          }
-        }, 800);
-        return () => clearTimeout(timer);
-      }, [draftContent]);
-
-      const handleAddSchedule = (e) => {
+      const handleAddScheduled = (e) => {
         e.preventDefault();
-        if (!title) return;
-        const item = {
+        if (!title.trim()) return;
+        onAddScheduled({
           id: "sched_" + Date.now(),
-          date: dateKey,
-          title,
+          title: title.trim(),
+          date: formatDateKey(date),
           time,
-          details
-        };
-        onAddScheduled(item);
+          details: details.trim()
+        });
         setTitle("");
         setDetails("");
       };
 
       return (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#222222] pb-2">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 max-h-[90vh] overflow-y-auto scrollbar-none shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
               <div>
-                <h3 className="text-sm font-semibold text-white">
+                <h3 className="text-sm font-semibold text-white">Daily Entry & Schedule</h3>
+                <p className="text-[11px] text-gray-400 mt-0.5">
                   {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                </h3>
-                <span className="text-[10px] text-gray-400">
-                  {autoSaved ? "Saved automatically ✓" : "Daily journal & schedule"}
-                </span>
+                </p>
               </div>
               <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Daily Journal</label>
+            {/* Journal Area */}
+            <div>
+              <label className="text-[11px] font-semibold text-gray-300">Journal & Notes</label>
               <textarea
                 value={draftContent}
                 onChange={(e) => setDraftContent(e.target.value)}
-                placeholder="Write reflections, thoughts, or plans for this day..."
-                className="w-full h-32 p-3 rounded-xl bg-black border border-[#222222] text-xs text-white focus:outline-none resize-none leading-relaxed"
+                placeholder="Write your thoughts, daily learnings, or observations..."
+                className="w-full mt-1.5 p-3 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none focus:border-appGreen resize-none h-28 leading-relaxed"
               />
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-[#222222]">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Scheduled Workouts</p>
-              
-              {scheduledForDate.length > 0 && (
-                <div className="space-y-1.5 mb-2">
-                  {scheduledForDate.map(s => (
-                    <div key={s.id} className="p-2 rounded-lg bg-black border border-[#222222] flex items-center justify-between text-xs">
+            {/* Scheduled Workouts for this date */}
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <label className="text-[11px] font-semibold text-gray-300">Scheduled for this Day</label>
+              {scheduledForDate.length > 0 ? (
+                <div className="space-y-1.5">
+                  {scheduledForDate.map(sw => (
+                    <div key={sw.id} className="p-2 rounded-xl glass-tile flex items-center justify-between text-xs">
                       <div>
-                        <p className="font-medium text-white">{s.title}</p>
-                        <p className="text-[10px] text-gray-400">{s.time} • {s.details}</p>
+                        <span className="font-medium text-white">{sw.title}</span>
+                        <span className="text-gray-400 ml-2 font-mono">{sw.time}</span>
                       </div>
-                      <button onClick={() => onDeleteScheduled(s.id)} className="text-gray-500 hover:text-red-400 text-xs">✕</button>
+                      <button onClick={() => onDeleteScheduled(sw.id)} className="text-gray-500 hover:text-red-400 text-xs px-1">✕</button>
                     </div>
                   ))}
                 </div>
+              ) : (
+                <p className="text-[11px] text-gray-500 italic">No workouts scheduled for this date.</p>
               )}
 
-              <form onSubmit={handleAddSchedule} className="space-y-2 bg-black/40 p-3 rounded-xl border border-[#222222]">
+              {/* Quick schedule form */}
+              <form onSubmit={handleAddScheduled} className="space-y-2 pt-1">
                 <input
                   type="text"
-                  placeholder="Session title (e.g. Upper Body)"
+                  placeholder="Workout title (e.g. Upper Hypertrophy)"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                  className="w-full p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none font-mono"
                   />
                   <input
                     type="text"
-                    placeholder="Focus / notes"
+                    placeholder="Focus / sets"
                     value={details}
                     onChange={(e) => setDetails(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-black border border-[#222222] text-xs text-white focus:outline-none"
+                    className="w-full p-2 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white focus:outline-none"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-1.5 rounded-lg bg-[#222222] hover:bg-gray-700 text-xs text-appGreen font-medium transition"
+                  className="w-full py-2 rounded-xl glass-tile hover:bg-white/[0.08] text-xs text-appGreen font-semibold transition"
                 >
                   + Add to this Date
                 </button>
@@ -2176,9 +2930,9 @@
                 onSaveJournal(draftContent);
                 onClose();
               }}
-              className="w-full py-2 text-xs rounded-lg bg-appGreen text-black font-semibold mt-2"
+              className="w-full py-2.5 text-xs rounded-xl bg-appGreen text-black font-semibold mt-2 hover:bg-green-400 transition"
             >
-              Done
+              Done & Save
             </button>
           </div>
         </div>
@@ -2186,30 +2940,48 @@
     }
 
     // ==========================================
-    // 8. SETTINGS & BACKUP MODAL
+    // 8. SETTINGS & PRESETS MODAL
     // ==========================================
-    function SettingsModal({ onClose, onExport, onImport }) {
+    function SettingsModal({ onClose, onExport, onImport, onResetPresets }) {
       return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#121212] border border-[#222222] rounded-2xl p-5 max-w-sm w-full space-y-4">
-            <div className="flex items-center justify-between border-b border-[#222222] pb-2">
-              <h3 className="text-sm font-semibold text-white">Data & Privacy</h3>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+              <h3 className="text-sm font-semibold text-white">Data & Presets</h3>
               <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
             </div>
 
             <p className="text-xs text-gray-400 leading-relaxed">
-              <strong>ARC</strong> operates completely offline with IndexedDB. No accounts, telemetry, or remote servers exist.
+              <strong>ARC v2.0</strong> operates completely offline with IndexedDB. No accounts, tracking, or remote telemetry exist.
             </p>
 
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={() => {
+                  onResetPresets();
+                  onClose();
+                }}
+                className="w-full py-2.5 rounded-xl border border-appGreen/40 bg-appGreenSubtle text-appGreen text-xs font-semibold hover:bg-appGreen/20 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>⚡ Load Curated Presets</span>
+              </button>
+
+              <a
+                href="/arc-v2.1.bundle"
+                download="arc-v2.1.bundle"
+                className="w-full py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-gray-300 text-xs font-medium hover:bg-white/[0.08] hover:text-white transition flex items-center justify-center space-x-1.5"
+              >
+                <span>📦 Download Git Bundle (v2.1)</span>
+              </a>
+
               <button
                 onClick={onExport}
-                className="w-full py-2.5 rounded-xl bg-[#222222] text-white text-xs font-medium hover:bg-gray-800 transition"
+                className="w-full py-2.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white text-xs font-medium hover:bg-white/[0.1] transition"
               >
                 Export Offline JSON Backup
               </button>
 
-              <label className="w-full py-2.5 rounded-xl border border-[#222222] text-gray-300 text-xs font-medium hover:bg-[#222222] transition flex items-center justify-center cursor-pointer">
+              <label className="w-full py-2.5 rounded-xl border border-white/[0.08] text-gray-300 text-xs font-medium hover:bg-white/[0.06] transition flex items-center justify-center cursor-pointer">
                 <span>Restore Backup File</span>
                 <input
                   type="file"
@@ -2220,7 +2992,7 @@
               </label>
             </div>
 
-            <p className="text-[10px] text-gray-600 text-center">Version 1.1.0 • Mobile-first Architecture</p>
+            <p className="text-[10px] text-gray-500 text-center">Version 2.1 · github.com/Jitvaraj/Arc</p>
           </div>
         </div>
       );
