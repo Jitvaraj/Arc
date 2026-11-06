@@ -15,7 +15,7 @@ A focused personal tracking, discipline, workout, and academic productivity syst
 
 *Track your progress. Build consistency. Keep moving forward.*
 
-[🐙 GitHub Repository](https://github.com/Jitvaraj/Orion-Forge)
+[🌐 Live Web App](https://jitvaraj.github.io/Orion-Forge/) · [📦 GitHub Releases](https://github.com/Jitvaraj/Orion-Forge/releases) · [🐙 GitHub Repository](https://github.com/Jitvaraj/Orion-Forge)
 
 </div>
 
