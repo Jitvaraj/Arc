@@ -582,11 +582,40 @@
       const [showDateModal, setShowDateModal] = useState(false);
       const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-      // PWA Install Prompt State
+      // PWA Install & Version Check State
+      const CURRENT_VERSION = "2.2.2";
       const [deferredPrompt, setDeferredPrompt] = useState(null);
       const [isAppInstalled, setIsAppInstalled] = useState(false);
       const [isIOSDevice, setIsIOSDevice] = useState(false);
       const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+      const [updateAvailable, setUpdateAvailable] = useState(null);
+      const [showUpdateModal, setShowUpdateModal] = useState(false);
+      const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+      const checkForUpdates = async (isManual = false) => {
+        setCheckingUpdate(true);
+        try {
+          const res = await fetch(`/version.json?t=${Date.now()}`);
+          if (!res.ok) throw new Error("Fetch failed");
+          const data = await res.json();
+          if (data && data.latestVersion && data.latestVersion !== CURRENT_VERSION) {
+            setUpdateAvailable(data);
+            if (isManual) setShowUpdateModal(true);
+          } else if (isManual) {
+            alert(`Orion is up to date! (v${CURRENT_VERSION})`);
+          }
+        } catch (err) {
+          console.log("Offline or version check error:", err);
+          if (isManual) alert("Unable to check for updates right now. Please verify your connection.");
+        } finally {
+          setCheckingUpdate(false);
+        }
+      };
+
+      useEffect(() => {
+        checkForUpdates(false);
+      }, []);
 
       useEffect(() => {
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -880,7 +909,7 @@
               <img src="/icon.svg" className="w-5 h-5 rounded-md shadow-[0_0_10px_rgba(74,222,128,0.4)]" alt="Orion Emblem" />
               <span className="font-bold text-white tracking-widest text-[14px]">ORION</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/[0.06] text-gray-300 border border-white/[0.06]">
-                v2.2
+                v{CURRENT_VERSION}
               </span>
             </div>
             <div className="flex items-center space-x-2.5">
@@ -906,6 +935,25 @@
               </button>
             </div>
           </header>
+
+          {/* Automatic Version Update Notification Banner */}
+          {updateAvailable && (
+            <div className="mx-4 mt-3 p-3 rounded-2xl bg-gradient-to-r from-emerald-600/30 via-teal-600/30 to-blue-600/30 border border-emerald-400/40 backdrop-blur-xl flex items-center justify-between space-x-3 shadow-xl z-20 shrink-0">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center space-x-1.5 text-xs font-bold text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>Update Available (v{updateAvailable.latestVersion})</span>
+                </div>
+                <p className="text-[11px] text-gray-200 truncate">{updateAvailable.releaseNotes || "New version is ready."}</p>
+              </div>
+              <button
+                onClick={() => setShowUpdateModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition shrink-0 shadow-md"
+              >
+                View
+              </button>
+            </div>
+          )}
 
           {/* Main Viewport Content */}
           <main className="flex-1 overflow-y-auto scrollbar-none pb-20 relative z-10">
@@ -1082,7 +1130,63 @@
               onResetPresets={handleResetToPresets}
               onTriggerInstall={handleTriggerInstall}
               isAppInstalled={isAppInstalled}
+              onCheckUpdates={() => checkForUpdates(true)}
+              checkingUpdate={checkingUpdate}
+              currentVersion={CURRENT_VERSION}
             />
+          )}
+
+          {/* Version Update Modal */}
+          {showUpdateModal && updateAvailable && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+              <div className="bg-[#121212] border border-emerald-500/40 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl text-left">
+                <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">🚀</span>
+                    <h3 className="text-sm font-semibold text-white">New Version Ready!</h3>
+                  </div>
+                  <button onClick={() => setShowUpdateModal(false)} className="text-gray-400 hover:text-white text-xs">✕</button>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-emerald-400 font-mono font-bold">
+                    Installed: v{CURRENT_VERSION} ➔ Latest: v{updateAvailable.latestVersion}
+                  </p>
+                  <p className="text-xs text-gray-300 leading-relaxed pt-1">
+                    {updateAvailable.releaseNotes}
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                  <a
+                    href={updateAvailable.apkUrl || "https://github.com/Jitvaraj/Orion-Forge/releases"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-green-500/20"
+                  >
+                    <span>🤖 Download Android APK Update</span>
+                  </a>
+
+                  <a
+                    href={updateAvailable.windowsUrl || "https://github.com/Jitvaraj/Orion-Forge/releases"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-2.5 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold hover:bg-purple-500/30 transition flex items-center justify-center space-x-1.5"
+                  >
+                    <span>💻 Download Windows Package</span>
+                  </a>
+
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="w-full py-2.5 rounded-xl bg-white/[0.08] border border-white/[0.1] text-white text-xs font-medium hover:bg-white/[0.15] transition flex items-center justify-center space-x-1.5"
+                  >
+                    <span>🔄 Reload Web App / PWA</span>
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-gray-500 text-center">Your local tracking data is preserved safely during updates.</p>
+              </div>
+            </div>
           )}
 
           {/* iOS Safari Install Guide Modal */}
@@ -3742,7 +3846,7 @@
     // ==========================================
     // 8. SETTINGS & PRESETS MODAL
     // ==========================================
-    function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled }) {
+    function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled, onCheckUpdates, checkingUpdate, currentVersion }) {
       return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none">
@@ -3752,8 +3856,23 @@
             </div>
 
             <p className="text-xs text-gray-400 leading-relaxed">
-              <strong>ORION v2.2</strong> operates completely offline with IndexedDB. Install it on Android, Windows, or iOS.
+              <strong>ORION v{currentVersion || "2.2.2"}</strong> operates completely offline with IndexedDB. Install it on Android, Windows, or iOS.
             </p>
+
+            {/* Version Update Checker Section */}
+            <div className="p-3 rounded-xl bg-black/60 border border-white/[0.08] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">App Updates</span>
+                <span className="text-[10px] font-mono text-emerald-400">v{currentVersion || "2.2.2"}</span>
+              </div>
+              <button
+                onClick={onCheckUpdates}
+                disabled={checkingUpdate}
+                className="w-full py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/30 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>{checkingUpdate ? "Checking..." : "🔄 Check for Updates"}</span>
+              </button>
+            </div>
 
             {/* Platform Applications Section */}
             <div className="p-3 rounded-xl bg-black/60 border border-white/[0.08] space-y-2">
@@ -3830,7 +3949,7 @@
               </label>
             </div>
 
-            <p className="text-[10px] text-gray-500 text-center">Orion v2.2 · Progressive Web App (PWA) · github.com/Jitvaraj/Orion-Forge</p>
+            <p className="text-[10px] text-gray-500 text-center">Orion v{currentVersion || "2.2.2"} · Progressive Web App (PWA) · github.com/Jitvaraj/Orion-Forge</p>
           </div>
         </div>
       );

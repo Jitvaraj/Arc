@@ -1,0 +1,8 @@
+{
+  "latestVersion": "2.2.2",
+  "releaseName": "ORION v2.2.2 — Multi-Platform Update Checker",
+  "releaseNotes": "Automatic cross-platform version checking, PWA update reload banner, and GitHub Releases integration.",
+  "apkUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
+  "windowsUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
+  "webUrl": "https://jitvaraj.github.io/Orion-Forge/"
+}

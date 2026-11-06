@@ -1,8 +1,9 @@
-const CACHE_NAME = 'orion-v2.2-cache';
+const CACHE_NAME = 'orion-v2.2.2-cache';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/version.json',
   '/icon.svg'
 ];
 
@@ -28,8 +29,22 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Always fetch version.json directly from network to detect new releases
+  if (event.request.url.includes('version.json')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
