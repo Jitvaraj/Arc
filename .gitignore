@@ -1,5 +1,6 @@
 node_modules/
 bun.lock
 .aistudio/
+arc-v2.1.bundle
 .DS_Store
 Thumbs.db
