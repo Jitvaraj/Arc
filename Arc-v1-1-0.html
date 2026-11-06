@@ -3745,29 +3745,63 @@
     function SettingsModal({ onClose, onExport, onImport, onResetPresets, onTriggerInstall, isAppInstalled }) {
       return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+          <div className="bg-[#121212] border border-white/[0.1] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-none">
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
-              <h3 className="text-sm font-semibold text-white">Data & Presets</h3>
+              <h3 className="text-sm font-semibold text-white">Device Apps & Settings</h3>
               <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">✕</button>
             </div>
 
             <p className="text-xs text-gray-400 leading-relaxed">
-              <strong>ORION v2.2</strong> operates completely offline with IndexedDB. Install it directly as a native app on any device.
+              <strong>ORION v2.2</strong> operates completely offline with IndexedDB. Install it on Android, Windows, or iOS.
             </p>
 
-            <div className="space-y-2 pt-1">
+            {/* Platform Applications Section */}
+            <div className="p-3 rounded-xl bg-black/60 border border-white/[0.08] space-y-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Cross-Platform Applications</span>
+              
               {!isAppInstalled && (
                 <button
                   onClick={() => {
                     onTriggerInstall();
                     onClose();
                   }}
-                  className="w-full py-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/10"
+                  className="w-full py-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:bg-emerald-500/30 transition flex items-center justify-center space-x-1.5"
                 >
-                  <span>📲 Install Orion App on Device</span>
+                  <span>📲 Instant PWA Install (All Devices)</span>
                 </button>
               )}
 
+              <a
+                href="https://github.com/Jitvaraj/Orion-Forge/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/20 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>🤖 Android App Package (APK)</span>
+              </a>
+
+              <a
+                href="https://github.com/Jitvaraj/Orion-Forge/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/20 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>💻 Windows Desktop Package</span>
+              </a>
+
+              <button
+                onClick={() => {
+                  onTriggerInstall();
+                  onClose();
+                }}
+                className="w-full py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition flex items-center justify-center space-x-1.5"
+              >
+                <span>📱 iPhone / iPad (iOS Safari PWA)</span>
+              </button>
+            </div>
+
+            {/* Data & Presets Actions */}
+            <div className="space-y-2 pt-1">
               <button
                 onClick={() => {
                   onResetPresets();

@@ -1,0 +1,9 @@
+{
+  "appId": "com.orion.app",
+  "appName": "Orion",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
