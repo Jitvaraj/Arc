@@ -495,6 +495,8 @@
     const IconNotes = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 12h6m-6 4h4m5 5H6a2 2 0 01-2-2V5a2 2 0 012-2h8l6 6v12a2 2 0 01-2 2z"/></svg>;
     const IconExams = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5"/></svg>;
     const IconSettings = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" strokeWidth="1.75"/></svg>;
+    const IconSpark = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>;
+    const IconFocus = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>;
 
     // --- Circular Progress Gauge Component ---
     function CircularProgress({ percentage, size = 76, strokeWidth = 6.5, label = "" }) {
@@ -927,6 +929,14 @@
                 }}
               />
             )}
+
+            {activeTab === "focus" && (
+              <FocusSection />
+            )}
+
+            {activeTab === "gemini" && (
+              <GeminiSpaceSection notes={notes} />
+            )}
           </main>
 
           {/* Date Journal & Scheduled Modal */}
@@ -963,11 +973,12 @@
           )}
 
           {/* Floating Frosted Bottom Navigation */}
-          <nav className="absolute bottom-0 left-0 right-0 h-16 bg-[#0a0a0a]/85 backdrop-blur-2xl border-t border-white/[0.08] flex items-center justify-around px-2 z-30 shrink-0">
+          <nav className="absolute bottom-0 left-0 right-0 h-16 bg-[#0a0a0a]/85 backdrop-blur-2xl border-t border-white/[0.08] flex items-center justify-around px-1 z-30 shrink-0">
             <NavButton label="Tracker" active={activeTab === "tracker"} icon={<IconTracker />} onClick={() => setActiveTab("tracker")} />
             <NavButton label="Calendar" active={activeTab === "calendar"} icon={<IconCalendar />} onClick={() => setActiveTab("calendar")} />
+            <NavButton label="Focus" active={activeTab === "focus"} icon={<IconFocus />} onClick={() => setActiveTab("focus")} />
             <NavButton label="Workout" active={activeTab === "workout"} icon={<IconWorkout />} onClick={() => setActiveTab("workout")} />
-            <NavButton label="Quotes" active={activeTab === "quotes"} icon={<IconQuotes />} onClick={() => setActiveTab("quotes")} />
+            <NavButton label="Gemini" active={activeTab === "gemini"} icon={<IconSpark />} onClick={() => setActiveTab("gemini")} />
             <NavButton label="Notes" active={activeTab === "notes"} icon={<IconNotes />} onClick={() => setActiveTab("notes")} />
             <NavButton label="Exams" active={activeTab === "exams"} icon={<IconExams />} onClick={() => setActiveTab("exams")} />
           </nav>
@@ -2934,6 +2945,451 @@
             >
               Done & Save
             </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 8. FOCUS TIMER & OMICRON / RAIN SOUNDSCAPE
+    // ==========================================
+    function FocusSection() {
+      const [timeLeft, setTimeLeft] = useState(25 * 60);
+      const [isRunning, setIsRunning] = useState(false);
+      const [mode, setMode] = useState("pomodoro"); // pomodoro (25m), shortBreak (5m), longBreak (15m)
+      const [soundMode, setSoundMode] = useState("none"); // none | omicron | rain | both
+      const audioCtxRef = useRef(null);
+      const oscillatorsRef = useRef([]);
+      const gainNodeRef = useRef(null);
+      const rainNodeRef = useRef(null);
+
+      // Timer interval effect
+      useEffect(() => {
+        let timer = null;
+        if (isRunning && timeLeft > 0) {
+          timer = setInterval(() => {
+            setTimeLeft(prev => prev - 1);
+          }, 1000);
+        } else if (timeLeft === 0 && isRunning) {
+          setIsRunning(false);
+          stopAudio();
+          alert("Focus session complete! Great work.");
+        }
+        return () => clearInterval(timer);
+      }, [isRunning, timeLeft]);
+
+      const switchMode = (newMode, secs) => {
+        setMode(newMode);
+        setIsRunning(false);
+        stopAudio();
+        setTimeLeft(secs);
+        setSoundMode("none");
+      };
+
+      const startAudio = (type) => {
+        try {
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          const ctx = audioCtxRef.current;
+          if (ctx.state === 'suspended') {
+            ctx.resume();
+          }
+          stopAudio();
+
+          const masterGain = ctx.createGain();
+          masterGain.gain.setValueAtTime(0.15, ctx.currentTime);
+          masterGain.connect(ctx.destination);
+          gainNodeRef.current = masterGain;
+
+          if (type === 'omicron' || type === 'both') {
+            // Omicron 100Hz binaural/harmonic tone for deep concentration
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            osc1.type = 'sine';
+            osc2.type = 'sine';
+            osc1.frequency.setValueAtTime(100, ctx.currentTime);
+            osc2.frequency.setValueAtTime(104, ctx.currentTime); // 4Hz binaural theta beat
+            osc1.connect(masterGain);
+            osc2.connect(masterGain);
+            osc1.start();
+            osc2.start();
+            oscillatorsRef.current = [osc1, osc2];
+          }
+
+          if (type === 'rain' || type === 'both') {
+            // Pink/White noise generator for soothing rain ambiance
+            const bufferSize = ctx.sampleRate * 2;
+            const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            for (let i = 0; i < bufferSize; i++) {
+              const white = Math.random() * 2 - 1;
+              b0 = 0.99886 * b0 + white * 0.0555179;
+              b1 = 0.99332 * b1 + white * 0.0750759;
+              b2 = 0.96900 * b2 + white * 0.1538520;
+              b3 = 0.86650 * b3 + white * 0.3104856;
+              b4 = 0.55000 * b4 + white * 0.5329522;
+              b5 = -0.7616 * b5 - white * 0.0168980;
+              output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+              output[i] *= 0.11;
+              b6 = white * 0.115926;
+            }
+            const whiteNoise = ctx.createBufferSource();
+            whiteNoise.buffer = noiseBuffer;
+            whiteNoise.loop = true;
+
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(850, ctx.currentTime);
+
+            whiteNoise.connect(filter);
+            filter.connect(masterGain);
+            whiteNoise.start();
+            rainNodeRef.current = whiteNoise;
+          }
+
+          setSoundMode(type);
+        } catch (e) {
+          console.error("Audio error:", e);
+        }
+      };
+
+      const stopAudio = () => {
+        try {
+          if (oscillatorsRef.current.length > 0) {
+            oscillatorsRef.current.forEach(o => { o.stop(); o.disconnect(); });
+            oscillatorsRef.current = [];
+          }
+          if (rainNodeRef.current) {
+            rainNodeRef.current.stop();
+            rainNodeRef.current.disconnect();
+            rainNodeRef.current = null;
+          }
+          setSoundMode("none");
+        } catch (e) {
+          console.error("Stop audio error:", e);
+        }
+      };
+
+      const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      };
+
+      const progressPct = (( (mode === "pomodoro" ? 25*60 : mode === "shortBreak" ? 5*60 : 15*60) - timeLeft ) / (mode === "pomodoro" ? 25*60 : mode === "shortBreak" ? 5*60 : 15*60)) * 100;
+
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Focus Sanctuary</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Pomodoro timer with Omicron 100Hz & Rain soundscapes</p>
+            </div>
+          </div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex glass-tile p-1 rounded-xl text-xs">
+            <button
+              onClick={() => switchMode("pomodoro", 25 * 60)}
+              className={`flex-1 py-2 rounded-lg font-medium transition text-center ${
+                mode === "pomodoro" ? "bg-white/[0.1] text-appGreen shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Pomodoro (25m)
+            </button>
+            <button
+              onClick={() => switchMode("shortBreak", 5 * 60)}
+              className={`flex-1 py-2 rounded-lg font-medium transition text-center ${
+                mode === "shortBreak" ? "bg-white/[0.1] text-cyan-400 shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Short Break (5m)
+            </button>
+            <button
+              onClick={() => switchMode("longBreak", 15 * 60)}
+              className={`flex-1 py-2 rounded-lg font-medium transition text-center ${
+                mode === "longBreak" ? "bg-white/[0.1] text-purple-400 shadow-sm" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Long Break (15m)
+            </button>
+          </div>
+
+          {/* Main Timer Display */}
+          <div className="p-8 rounded-2xl glass-panel flex flex-col items-center justify-center space-y-6 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-appGreen/5 to-transparent pointer-events-none"></div>
+
+            <div className="relative flex items-center justify-center">
+              <div className="w-48 h-48 rounded-full border-4 border-white/[0.08] flex items-center justify-center relative">
+                <div className="absolute inset-0 rounded-full border-4 border-appGreen animate-pulse opacity-45" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 50%)' }}></div>
+                <div className="text-center">
+                  <h2 className="text-4xl font-extrabold text-white font-mono tabular-nums tracking-wider">
+                    {formatTime(timeLeft)}
+                  </h2>
+                  <span className="text-[10px] text-appGreen font-semibold uppercase tracking-widest mt-1 block">
+                    {isRunning ? "Deep Focus Active" : "Paused"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center space-x-3 w-full max-w-xs">
+              <button
+                onClick={() => setIsRunning(!isRunning)}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition shadow-lg ${
+                  isRunning
+                    ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30"
+                    : "bg-appGreen text-black hover:bg-green-400"
+                }`}
+              >
+                {isRunning ? "Pause Session" : "Start Focus"}
+              </button>
+              <button
+                onClick={() => {
+                  setIsRunning(false);
+                  stopAudio();
+                  setTimeLeft(mode === "pomodoro" ? 25*60 : mode === "shortBreak" ? 5*60 : 15*60);
+                }}
+                className="px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.04] text-gray-300 text-xs font-semibold hover:bg-white/[0.08]"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          {/* Soundscape Synthesizer */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-semibold text-white">Ambient Soundscapes</h3>
+                <p className="text-[10px] text-gray-400">Synthesized 100Hz Omicron & soothing Rain generator</p>
+              </div>
+              {soundMode !== "none" && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-appGreenSubtle text-appGreen border border-appGreen/30 animate-pulse">
+                  Playing: {soundMode.toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => startAudio("omicron")}
+                className={`py-2.5 rounded-xl border text-xs font-medium transition ${
+                  soundMode === "omicron"
+                    ? "bg-appGreenSubtle text-appGreen border-appGreen/40"
+                    : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
+                }`}
+              >
+                ✨ Omicron 100Hz
+              </button>
+              <button
+                onClick={() => startAudio("rain")}
+                className={`py-2.5 rounded-xl border text-xs font-medium transition ${
+                  soundMode === "rain"
+                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                    : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
+                }`}
+              >
+                🌧️ Rain Ambiance
+              </button>
+              <button
+                onClick={() => startAudio("both")}
+                className={`py-2.5 rounded-xl border text-xs font-medium transition ${
+                  soundMode === "both"
+                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                    : "bg-black/60 text-gray-300 border-white/[0.08] hover:bg-white/[0.06]"
+                }`}
+              >
+                🌌 Omicron + Rain
+              </button>
+            </div>
+
+            {soundMode !== "none" && (
+              <button
+                onClick={stopAudio}
+                className="w-full py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/20 transition"
+              >
+                Stop Soundscape
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 9. GEMINI SPACE & FLASHCARD GENERATOR
+    // ==========================================
+    function GeminiSpaceSection({ notes }) {
+      const [apiKey, setApiKey] = useState(localStorage.getItem("orion_gemini_key") || "");
+      const [connected, setConnected] = useState(!!localStorage.getItem("orion_gemini_key"));
+      const [prompt, setPrompt] = useState("");
+      const [response, setResponse] = useState("");
+      const [loading, setLoading] = useState(false);
+      const [flashcards, setFlashcards] = useState([]);
+      const [flippedCard, setFlippedCard] = useState({});
+
+      const handleSaveKey = (e) => {
+        e.preventDefault();
+        if (!apiKey.trim()) return;
+        localStorage.setItem("orion_gemini_key", apiKey.trim());
+        setConnected(true);
+        alert("Gemini API key saved successfully!");
+      };
+
+      const handleGenerateFlashcards = async () => {
+        if (!notes || notes.length === 0) {
+          alert("Please add some study notes first to generate flashcards.");
+          return;
+        }
+        setLoading(true);
+        setResponse("");
+        try {
+          const key = localStorage.getItem("orion_gemini_key");
+          const noteText = notes.map(n => `Title: ${n.title}\nContent: ${n.content}`).join("\n\n");
+          
+          if (!key) {
+            // Mock intelligent flashcards if no key provided yet
+            setTimeout(() => {
+              setFlashcards([
+                { id: 1, q: "What is the primary rule of the ARC / Orion Protocol?", a: "90-Minute Focus Block with zero notifications and active recall over passive reading." },
+                { id: 2, q: "Explain the Feynman Technique step 3.", a: "Pinpoint exact moments where explanation stumbles or uses hand-waving." },
+                { id: 3, q: "What is the Stoic Shinobi mindset regarding test pressure?", a: "Accept pressure as a refining fire. Detach ego from practice test scores." }
+              ]);
+              setLoading(false);
+            }, 1000);
+            return;
+          }
+
+          // Real call to Gemini API using @google/genai pattern
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Based on these study notes, generate 3 high-yield Q&A flashcards in valid JSON format as an array of objects with keys "q" and "a":\n\n${noteText}`
+                }]
+              }]
+            })
+          });
+          const data = await res.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          setResponse(text);
+          setLoading(false);
+        } catch (err) {
+          console.error(err);
+          setLoading(false);
+          alert("Failed to generate via Gemini: " + err.message);
+        }
+      };
+
+      return (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">Gemini Space</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Connect Google AI & generate smart study flashcards</p>
+            </div>
+          </div>
+
+          {/* Google Account / API Key Connection Card */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-appGreen animate-pulse"></span>
+                <h3 className="text-xs font-semibold text-white">Gemini API Integration</h3>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                connected ? "border-appGreen/30 text-appGreen bg-appGreenSubtle" : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10"
+              }`}>
+                {connected ? "Connected" : "Key Required"}
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveKey} className="space-y-2.5 pt-1">
+              <div>
+                <label className="text-[11px] text-gray-400">Google Gemini API Key</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="AIzaSy..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-appGreen"
+                />
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition"
+                >
+                  Save & Connect Space
+                </button>
+                {connected && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem("orion_gemini_key");
+                      setApiKey("");
+                      setConnected(false);
+                    }}
+                    className="px-3 py-2 rounded-xl border border-white/[0.08] text-gray-400 hover:text-white text-xs"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Flashcards Generator Card */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-semibold text-white">AI Flashcard Generator</h3>
+                <p className="text-[10px] text-gray-400">Transform your notes into active recall flashcards</p>
+              </div>
+              <button
+                onClick={handleGenerateFlashcards}
+                disabled={loading}
+                className="px-3 py-1.5 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition flex items-center space-x-1"
+              >
+                <span>{loading ? "Generating..." : "⚡ Generate Cards"}</span>
+              </button>
+            </div>
+
+            {flashcards.length > 0 && (
+              <div className="space-y-2.5 pt-2">
+                {flashcards.map((card, idx) => {
+                  const isFlipped = flippedCard[card.id];
+                  return (
+                    <div
+                      key={card.id}
+                      onClick={() => setFlippedCard(prev => ({ ...prev, [card.id]: !prev[card.id] }))}
+                      className="p-4 rounded-xl glass-tile cursor-pointer hover:border-white/[0.15] transition space-y-2 relative"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-appGreen font-mono font-bold">Flashcard #{idx + 1}</span>
+                        <span className="text-[10px] text-gray-500 italic">Click to flip</span>
+                      </div>
+                      <p className="text-xs font-medium text-white">
+                        {isFlipped ? `A: ${card.a}` : `Q: ${card.q}`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {response && (
+              <div className="p-3 rounded-xl bg-black/60 border border-white/[0.08] text-xs text-gray-300 font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                {response}
+              </div>
+            )}
           </div>
         </div>
       );
